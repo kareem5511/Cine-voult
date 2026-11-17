@@ -26,6 +26,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 9.3.1
+          cache-disabled: true
 
       - name: Prepare Environment & Keystore
         run: |
@@ -38,7 +39,7 @@ jobs:
 
       - name: Build Debug APK
         run: |
-          gradle :app:assembleDebug --stacktrace -Djava.awt.headless=true 2>&1 | tee gradle-build.log
+          gradle :app:assembleDebug --stacktrace --no-configuration-cache --no-build-cache -Djava.awt.headless=true 2>&1 | tee gradle-build.log
 
       - name: Inspect Build Outputs
         if: always()
@@ -52,6 +53,13 @@ jobs:
                   for line in f.read().splitlines():
                       if line.strip():
                           print(f"::notice title=DiscoveredAPK::{line.strip()}")
+          if os.path.exists("gradle-build.log"):
+              with open("gradle-build.log", errors="ignore") as f:
+                  lines = f.readlines()
+              for i, l in enumerate(lines[-50:]):
+                  l = l.strip().replace("\r", "").replace("\n", "")
+                  if l:
+                      print(f"::notice title=BuildLine_{i}::{l}")
           '
 
       - name: Upload Build Log
