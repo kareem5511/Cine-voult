@@ -385,6 +385,26 @@ private fun createTrailerWebView(
     url: String,
     onLoaded: () -> Unit = {}
 ): WebView {
+    val html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+          <style>
+            html, body { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #000000; overflow: hidden; }
+            iframe { border: none; width: 100%; height: 100%; display: block; }
+          </style>
+        </head>
+        <body>
+          <iframe
+            src="$url"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowfullscreen>
+          </iframe>
+        </body>
+        </html>
+    """.trimIndent()
+
     return WebView(context).apply {
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -409,6 +429,6 @@ private fun createTrailerWebView(
                 onLoaded()
             }
         }
-        loadUrl(url)
+        loadDataWithBaseURL("https://www.youtube.com", html, "text/html", "UTF-8", null)
     }
 }

@@ -86,7 +86,9 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.toColorInt
 import com.example.R
 import com.example.data.model.PlaybackEngine
+import com.example.data.model.PosterLayout
 import com.example.data.model.TrailerAutoPlayMode
+import com.example.data.model.UiTextScale
 import com.example.data.model.UserPreferences
 import com.example.ui.theme.AccentPreset
 import com.example.ui.theme.AmoledCard
@@ -293,15 +295,60 @@ fun SettingsScreen(
                         }
                     )
 
-                    SettingsToggleRow(
-                        title = "Compact Poster Grid",
-                        subtitle = "Display 3 poster columns instead of 2 on Discover & Vault",
-                        checked = preferences.compactGrid,
-                        testTag = "compact_grid_switch",
-                        onCheckedChange = { checked ->
-                            onUpdatePreferences { it.copy(compactGrid = checked) }
-                        }
+                    Text(
+                        text = "Poster Grid Layout",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = Color.White
                     )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        PosterLayout.entries.forEach { layout ->
+                            FilterChip(
+                                selected = preferences.posterLayout == layout.key,
+                                onClick = {
+                                    onUpdatePreferences {
+                                        it.copy(
+                                            posterLayout = layout.key,
+                                            compactGrid = layout == PosterLayout.COMPACT_3
+                                        )
+                                    }
+                                },
+                                label = { Text(layout.label, fontSize = 12.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                    selectedLabelColor = Color.Black
+                                ),
+                                modifier = Modifier.testTag("poster_layout_${layout.key}")
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "UI Text Size",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = Color.White
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        UiTextScale.entries.forEach { scale ->
+                            FilterChip(
+                                selected = preferences.uiTextScale == scale.key,
+                                onClick = {
+                                    onUpdatePreferences { it.copy(uiTextScale = scale.key) }
+                                },
+                                label = { Text(scale.label, fontSize = 12.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                    selectedLabelColor = Color.Black
+                                ),
+                                modifier = Modifier.testTag("ui_text_scale_${scale.key}")
+                            )
+                        }
+                    }
 
                     SettingsToggleRow(
                         title = "Ambient Backdrop Glow",
@@ -333,32 +380,30 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                         color = Color.White
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        FilterChip(
-                            selected = preferences.preferredEngine == PlaybackEngine.EXOPLAYER.key,
-                            onClick = {
-                                onUpdatePreferences { it.copy(preferredEngine = PlaybackEngine.EXOPLAYER.key) }
-                            },
-                            label = { Text("Media3 ExoPlayer") },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedLabelColor = Color.Black
-                            ),
-                            modifier = Modifier.testTag("engine_exoplayer_chip")
-                        )
-                        FilterChip(
-                            selected = preferences.preferredEngine == PlaybackEngine.LIBMPV.key,
-                            onClick = {
-                                onUpdatePreferences { it.copy(preferredEngine = PlaybackEngine.LIBMPV.key) }
-                            },
-                            label = { Text("libmpv (MPV)") },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedLabelColor = Color.Black
-                            ),
-                            modifier = Modifier.testTag("engine_libmpv_chip")
-                        )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        PlaybackEngine.entries.forEach { engine ->
+                            FilterChip(
+                                selected = preferences.preferredEngine == engine.key,
+                                onClick = {
+                                    onUpdatePreferences { it.copy(preferredEngine = engine.key) }
+                                },
+                                label = { Text(engine.displayName, fontSize = 12.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                    selectedLabelColor = Color.Black
+                                ),
+                                modifier = Modifier.testTag("engine_${engine.key.lowercase()}_chip")
+                            )
+                        }
                     }
+                    Text(
+                        text = "Auto mode routes HLS/MP4 streams to ExoPlayer, and MKV/WebM/DTS/TrueHD/anime subtitles to libmpv. Optimized for Qualcomm Snapdragon & MediaTek chipsets.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.65f)
+                    )
 
                     SettingsToggleRow(
                         title = "Hardware Video Acceleration",

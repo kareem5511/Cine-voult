@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -37,6 +40,7 @@ import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Extension
+import androidx.compose.material.icons.rounded.OpenInBrowser
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -370,6 +374,27 @@ fun AddonsScreen(
                             unfocusedTextColor = Color.White
                         )
                     )
+                    val cfgUrl = remember(addon.manifestUrl) {
+                        if (addon.manifestUrl.contains("/manifest.json")) addon.manifestUrl.replace("/manifest.json", "/configure")
+                        else if (addon.manifestUrl.endsWith("/")) "${addon.manifestUrl}configure"
+                        else "${addon.manifestUrl}/configure"
+                    }
+                    val ctx = LocalContext.current
+                    OutlinedButton(
+                        onClick = {
+                            runCatching {
+                                ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(cfgUrl)).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                })
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Rounded.OpenInBrowser, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Open Configuration Web Page")
+                    }
                 }
             },
             confirmButton = {
@@ -611,18 +636,53 @@ private fun AddonCard(
                     }
                 }
 
+                val cardContext = LocalContext.current
+                val cardConfigUrl = remember(addon.manifestUrl) {
+                    if (addon.manifestUrl.contains("/manifest.json")) addon.manifestUrl.replace("/manifest.json", "/configure")
+                    else if (addon.manifestUrl.endsWith("/")) "${addon.manifestUrl}configure"
+                    else "${addon.manifestUrl}/configure"
+                }
+
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Configure button
+                    // Open Configuration in Browser
+                    OutlinedButton(
+                        onClick = {
+                            runCatching {
+                                cardContext.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(cardConfigUrl)).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                })
+                            }
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)),
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Rounded.OpenInBrowser,
+                            contentDescription = "Configure in browser",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Configure",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    // Manifest settings button
                     IconButton(
                         onClick = onConfigure,
                         modifier = Modifier.size(36.dp)
                     ) {
                         Icon(
                             Icons.Rounded.Settings,
-                            contentDescription = "Configure ${addon.name}",
+                            contentDescription = "Edit manifest for ${addon.name}",
                             tint = Color.White.copy(alpha = 0.75f),
                             modifier = Modifier.size(18.dp)
                         )

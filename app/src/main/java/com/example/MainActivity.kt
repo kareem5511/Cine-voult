@@ -91,13 +91,17 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.UiTextScale
 import androidx.core.view.WindowCompat
 import androidx.credentials.CredentialManager
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
@@ -402,11 +406,21 @@ private fun CineVaultShell(
         }
     }
 
+    val fontScaleMultiplier = UiTextScale.fromKey(preferences.uiTextScale).scale
+    val currentDensity = LocalDensity.current
+    val scaledDensity = remember(currentDensity.density, currentDensity.fontScale, fontScaleMultiplier) {
+        Density(
+            density = currentDensity.density,
+            fontScale = currentDensity.fontScale * fontScaleMultiplier
+        )
+    }
+
     CineVaultTheme(
         accentPreset = accentPreset,
         amoledBlack = preferences.amoledBlack
     ) {
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        CompositionLocalProvider(LocalDensity provides scaledDensity) {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val useRail = maxWidth >= 640.dp
 
             Scaffold(
@@ -487,6 +501,7 @@ private fun CineVaultShell(
                                     discoverState = discoverState,
                                     continueWatching = continueWatching,
                                     compactGrid = preferences.compactGrid,
+                                    posterLayout = preferences.posterLayout,
                                     preferredEngine = preferredEngine,
                                     autoPlayTrailers = preferences.autoPlayTrailers,
                                     spotlightMetaMap = spotlightMetaMap,
@@ -544,6 +559,7 @@ private fun CineVaultShell(
                                     downloads = downloads,
                                     localMedia = localMedia,
                                     preferredEngine = preferredEngine,
+                                    posterLayout = preferences.posterLayout,
                                     onAddPersonalCloudMedia = viewModel::addPersonalCloudMedia,
                                     onRemoveLibraryItem = viewModel::removeLibraryItem,
                                     onImportLocalVideo = viewModel::importLocalVideo,
@@ -707,22 +723,24 @@ private fun CineVaultShell(
                 }
             }
 
-            // Fixed top status-bar gradient scrim
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(40.dp)
-                    .align(Alignment.TopCenter)
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Black,
-                                Color.Black.copy(alpha = 0.95f),
-                                Color.Transparent
+            // Fixed top status-bar gradient scrim (hidden in full-screen player)
+            if (!isFullScreenRoute) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(40.dp)
+                        .align(Alignment.TopCenter)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Black,
+                                    Color.Black.copy(alpha = 0.95f),
+                                    Color.Transparent
+                                )
                             )
                         )
-                    )
-            )
+                )
+            }
 
             // Centered Floating Frosted-Glass Pill Dock & bottom edge scrim
             if (!isFullScreenRoute && !useRail) {
@@ -824,6 +842,7 @@ private fun CineVaultShell(
             }
         }
     }
+}
 }
 
 @Composable

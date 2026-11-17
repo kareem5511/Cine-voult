@@ -58,6 +58,7 @@ class ExoPlayerController(private val context: Context) {
     private var selectedExternalSubUrl: String = ""
     private var subtitlesDisabledByPref: Boolean = false
     private var pendingSubBottomFraction: Float = 0.18f
+    private var preferredAudioLanguage: String = ""
 
     private val _state = MutableStateFlow(ActivePlaybackState(engine = PlaybackEngine.EXOPLAYER))
     val state: StateFlow<ActivePlaybackState> = _state.asStateFlow()
@@ -72,6 +73,7 @@ class ExoPlayerController(private val context: Context) {
         localSubtitleUri: String
     ) {
         currentStreamUrl = streamUrl
+        preferredAudioLanguage = preferredAudioLang
         subtitlesDisabledByPref = preferredSubtitleLang.equals("off", ignoreCase = true)
         externalSubtitles = buildList {
             if (localSubtitleUri.isNotBlank()) {
@@ -102,32 +104,41 @@ class ExoPlayerController(private val context: Context) {
 
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                /* minBufferMs = */ 12_000,
-                /* maxBufferMs = */ 35_000,
-                /* bufferForPlaybackMs = */ 1_200,
-                /* bufferForPlaybackAfterRebufferMs = */ 2_500
+                /* minBufferMs = */ 15_000,
+                /* maxBufferMs = */ 45_000,
+                /* bufferForPlaybackMs = */ 1_500,
+                /* bufferForPlaybackAfterRebufferMs = */ 3_000
             )
             .build()
 
         val meter = DefaultBandwidthMeter.Builder(context).build()
         bandwidthMeter = meter
 
+        val extractorsFactory = androidx.media3.extractor.DefaultExtractorsFactory()
+            .setConstantBitrateSeekingEnabled(true)
+
         val exo = ExoPlayer.Builder(context, renderersFactory)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory, extractorsFactory))
             .setLoadControl(loadControl)
             .setBandwidthMeter(meter)
             .build()
 
         val trackParamsBuilder = exo.trackSelectionParameters.buildUpon()
-        if (preferredAudioLang.isNotBlank() && !preferredAudioLang.equals("auto", ignoreCase = true)) {
-            trackParamsBuilder.setPreferredAudioLanguage(preferredAudioLang)
+        val audioCodes = LanguageCodeMatcher.getCodes(preferredAudioLang)
+        if (audioCodes.isNotEmpty()) {
+            trackParamsBuilder.setPreferredAudioLanguages(*audioCodes.toTypedArray())
         }
         if (subtitlesDisabledByPref) {
             trackParamsBuilder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
         } else {
             trackParamsBuilder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
             if (preferredSubtitleLang.isNotBlank() && !preferredSubtitleLang.equals("auto", ignoreCase = true)) {
-                trackParamsBuilder.setPreferredTextLanguage(preferredSubtitleLang)
+                val subCodes = LanguageCodeMatcher.getCodes(preferredSubtitleLang)
+                if (subCodes.isNotEmpty()) {
+                    trackParamsBuilder.setPreferredTextLanguages(*subCodes.toTypedArray())
+                } else {
+                    trackParamsBuilder.setPreferredTextLanguage(preferredSubtitleLang)
+                }
             }
         }
         exo.trackSelectionParameters = trackParamsBuilder.build()
@@ -423,6 +434,25 @@ class ExoPlayerController(private val context: Context) {
                         isSelected = !subtitlesDisabledByPref && group.isSelected
                     )
                 )
+            }
+        }
+
+        val exo = player
+        if (exo != null && preferredAudioLanguage.isNotBlank() && !preferredAudioLanguage.equals("auto", ignoreCase = true)) {
+            val hasMatchingSelectedAudio = audio.any { it.isSelected && LanguageCodeMatcher.matches(it.language, preferredAudioLanguage) }
+            if (!hasMatchingSelectedAudio) {
+                val matchingGroup = tracks.groups.firstOrNull { g ->
+                    if (g.type == C.TRACK_TYPE_AUDIO && g.length > 0) {
+                        val fmt = g.getTrackFormat(0)
+                        LanguageCodeMatcher.matches(fmt.language, preferredAudioLanguage) ||
+                            LanguageCodeMatcher.matches(fmt.label, preferredAudioLanguage)
+                    } else false
+                }
+                if (matchingGroup != null && !matchingGroup.isSelected) {
+                    exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
+                        .setOverrideForType(TrackSelectionOverride(matchingGroup.mediaTrackGroup, 0))
+                        .build()
+                }
             }
         }
         externalSubtitles.forEach { ext ->

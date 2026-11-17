@@ -41,6 +41,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -139,15 +140,11 @@ class CineVaultViewModel(
             initialValue = UiState.Loading
         )
 
-    val preferencesState: StateFlow<UserPreferences> = syncRepository.observePreferences()
-        .catch { error ->
-            val fsError = error.unwrapFirestoreException()
-            if (fsError == null && error is CancellationException) throw error
-            Log.w(TAG, "Error observing preferences, using local cache", fsError ?: error)
-        }
+    val preferencesState: StateFlow<UserPreferences> = localPreferencesStore.preferencesFlow
+        .map { it.copy(userId = currentUserId) }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
+            started = SharingStarted.Eagerly,
             initialValue = UserPreferences(userId = currentUserId)
         )
 
@@ -203,7 +200,11 @@ class CineVaultViewModel(
                 if (state is UiState.Success) {
                     if (state.data.isEmpty() && !seededDefaults) {
                         seededDefaults = true
-                        seedStarterAddons()
+                        val hasSeeded = localPreferencesStore.starterAddonsSeededFlow.first()
+                        if (!hasSeeded) {
+                            localPreferencesStore.setStarterAddonsSeeded(true)
+                            seedStarterAddons()
+                        }
                     } else if (state.data.isNotEmpty()) {
                         refreshDiscoverCatalogs(state.data, _discoverState.value.searchQuery)
                     }
@@ -211,11 +212,17 @@ class CineVaultViewModel(
             }
         }
         viewModelScope.launch {
-            preferencesState.collect { prefs ->
-                if (prefs.userId.isNotBlank()) {
-                    localPreferencesStore.mergeRemotePreferences(prefs)
+            syncRepository.observePreferences()
+                .catch { error ->
+                    val fsError = error.unwrapFirestoreException()
+                    if (fsError == null && error is CancellationException) throw error
+                    Log.w(TAG, "Error observing remote preferences, staying on local DataStore", fsError ?: error)
                 }
-            }
+                .collect { remotePrefs ->
+                    if (remotePrefs.userId.isNotBlank()) {
+                        localPreferencesStore.mergeRemotePreferences(remotePrefs)
+                    }
+                }
         }
     }
 

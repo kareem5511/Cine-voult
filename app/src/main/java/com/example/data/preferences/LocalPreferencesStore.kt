@@ -27,6 +27,8 @@ class LocalPreferencesStore(private val context: Context) {
         val AUDIO_LANG = stringPreferencesKey("preferred_audio_lang")
         val ACCENT = stringPreferencesKey("accent_preset")
         val COMPACT_GRID = booleanPreferencesKey("compact_grid")
+        val POSTER_LAYOUT = stringPreferencesKey("poster_layout")
+        val UI_TEXT_SCALE = stringPreferencesKey("ui_text_scale")
         val AMOLED_BLACK = booleanPreferencesKey("amoled_black")
         val AUTO_PLAY_TRAILERS = stringPreferencesKey("auto_play_trailers")
         val AUTO_LOCAL_META = booleanPreferencesKey("auto_fetch_local_metadata")
@@ -40,6 +42,7 @@ class LocalPreferencesStore(private val context: Context) {
         val SIMULTANEOUS_DL = intPreferencesKey("simultaneous_downloads_limit")
         val EMBEDDED_SUB_PRIORITY = booleanPreferencesKey("embedded_subtitle_priority")
         val GUEST_SKIPPED = booleanPreferencesKey("guest_mode_skipped")
+        val STARTER_ADDONS_SEEDED = booleanPreferencesKey("starter_addons_seeded")
         val HIDDEN_CATALOGS = stringSetPreferencesKey("hidden_catalog_keys")
         val CATALOG_ORDER = stringPreferencesKey("catalog_order_csv")
     }
@@ -51,6 +54,16 @@ class LocalPreferencesStore(private val context: Context) {
     suspend fun setGuestModeSkipped(skipped: Boolean) {
         context.cineVaultDataStore.edit { mutable ->
             mutable[Keys.GUEST_SKIPPED] = skipped
+        }
+    }
+
+    val starterAddonsSeededFlow: Flow<Boolean> = context.cineVaultDataStore.data.map { prefs ->
+        prefs[Keys.STARTER_ADDONS_SEEDED] ?: false
+    }
+
+    suspend fun setStarterAddonsSeeded(seeded: Boolean) {
+        context.cineVaultDataStore.edit { mutable ->
+            mutable[Keys.STARTER_ADDONS_SEEDED] = seeded
         }
     }
 
@@ -81,7 +94,7 @@ class LocalPreferencesStore(private val context: Context) {
 
     val preferencesFlow: Flow<UserPreferences> = context.cineVaultDataStore.data.map { prefs ->
         UserPreferences(
-            preferredEngine = prefs[Keys.ENGINE] ?: "EXOPLAYER",
+            preferredEngine = prefs[Keys.ENGINE] ?: "AUTO",
             hardwareDecoding = prefs[Keys.HW_DECODING] ?: true,
             subtitleFontSizeSp = prefs[Keys.SUB_FONT_SIZE] ?: 18,
             subtitleColorHex = prefs[Keys.SUB_COLOR] ?: "#FFFFFF",
@@ -91,6 +104,8 @@ class LocalPreferencesStore(private val context: Context) {
             preferredAudioLang = prefs[Keys.AUDIO_LANG] ?: "en",
             accentPreset = prefs[Keys.ACCENT] ?: "TUNGSTEN_GOLD",
             compactGrid = prefs[Keys.COMPACT_GRID] ?: false,
+            posterLayout = prefs[Keys.POSTER_LAYOUT] ?: "STANDARD_2",
+            uiTextScale = prefs[Keys.UI_TEXT_SCALE] ?: "NORMAL",
             amoledBlack = prefs[Keys.AMOLED_BLACK] ?: false,
             autoPlayTrailers = prefs[Keys.AUTO_PLAY_TRAILERS] ?: "WIFI_ONLY",
             autoFetchLocalMetadata = prefs[Keys.AUTO_LOCAL_META] ?: true,
@@ -118,6 +133,8 @@ class LocalPreferencesStore(private val context: Context) {
             mutable[Keys.AUDIO_LANG] = prefs.preferredAudioLang
             mutable[Keys.ACCENT] = prefs.accentPreset
             mutable[Keys.COMPACT_GRID] = prefs.compactGrid
+            mutable[Keys.POSTER_LAYOUT] = prefs.posterLayout
+            mutable[Keys.UI_TEXT_SCALE] = prefs.uiTextScale
             mutable[Keys.AMOLED_BLACK] = prefs.amoledBlack
             mutable[Keys.AUTO_PLAY_TRAILERS] = prefs.autoPlayTrailers
             mutable[Keys.AUTO_LOCAL_META] = prefs.autoFetchLocalMetadata
@@ -145,9 +162,20 @@ class LocalPreferencesStore(private val context: Context) {
             mutable[Keys.AUDIO_LANG] = remote.preferredAudioLang
             mutable[Keys.ACCENT] = remote.accentPreset
             mutable[Keys.COMPACT_GRID] = remote.compactGrid
+            mutable[Keys.POSTER_LAYOUT] = remote.posterLayout
+            mutable[Keys.UI_TEXT_SCALE] = remote.uiTextScale
+            mutable[Keys.AMOLED_BLACK] = remote.amoledBlack
+            mutable[Keys.AUTO_PLAY_TRAILERS] = remote.autoPlayTrailers
             mutable[Keys.AUTO_LOCAL_META] = remote.autoFetchLocalMetadata
             mutable[Keys.WIFI_ONLY] = remote.downloadWifiOnly
-            // local-only flags preserved
+            mutable[Keys.AMBIENT_GLOW] = remote.ambientBackdropGlow
+            mutable[Keys.AUTO_MATCH_STREAM] = remote.autoMatchBestStream
+            mutable[Keys.AUTO_SKIP_INTRO] = remote.autoSkipIntro
+            mutable[Keys.AUTO_PLAY_NEXT] = remote.autoPlayNextEpisode
+            mutable[Keys.CODEC_FALLBACK] = remote.codecCompatibilityFallback
+            mutable[Keys.DL_QUALITY] = remote.defaultDownloadQuality
+            mutable[Keys.SIMULTANEOUS_DL] = remote.simultaneousDownloadsLimit
+            mutable[Keys.EMBEDDED_SUB_PRIORITY] = remote.embeddedSubtitlePriority
         }
     }
 }

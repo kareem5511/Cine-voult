@@ -38,8 +38,10 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import com.example.data.model.PosterLayout
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -139,6 +141,7 @@ fun DiscoverScreen(
     discoverState: DiscoverUiState,
     continueWatching: List<LibraryMediaItem> = emptyList(),
     compactGrid: Boolean,
+    posterLayout: String = "STANDARD_2",
     preferredEngine: PlaybackEngine,
     autoPlayTrailers: String = "WIFI_ONLY",
     spotlightMetaMap: Map<String, StremioMetaDetail> = emptyMap(),
@@ -509,7 +512,18 @@ fun DiscoverScreen(
                         )
                     }
 
-                    val cardWidth = if (compactGrid) 118.dp else 142.dp
+                    val parsedPosterLayout = remember(posterLayout, compactGrid) {
+                        if (posterLayout.isNotBlank()) com.example.data.model.PosterLayout.fromKey(posterLayout)
+                        else if (compactGrid) com.example.data.model.PosterLayout.COMPACT_3
+                        else com.example.data.model.PosterLayout.STANDARD_2
+                    }
+                    val cardWidth = when (parsedPosterLayout) {
+                        com.example.data.model.PosterLayout.BENTO_4 -> 105.dp
+                        com.example.data.model.PosterLayout.COMPACT_3 -> 118.dp
+                        com.example.data.model.PosterLayout.STANDARD_2 -> 142.dp
+                        com.example.data.model.PosterLayout.CINEMATIC_1 -> 180.dp
+                        com.example.data.model.PosterLayout.LIST_DETAILED -> 150.dp
+                    }
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -569,6 +583,7 @@ fun DiscoverScreen(
         CatalogFullBrowserScreen(
             section = activeBrowseSection,
             compactGrid = compactGrid,
+            posterLayout = posterLayout,
             onSelectMedia = { meta ->
                 activeBrowseSectionKey = null
                 onSelectMedia(meta)
@@ -587,6 +602,7 @@ fun DiscoverScreen(
         GlobalSearchOverlay(
             discoverState = discoverState,
             compactGrid = compactGrid,
+            posterLayout = posterLayout,
             onSearchChange = onSearchChange,
             onSelectMedia = { meta ->
                 searchExpanded = false
@@ -628,6 +644,17 @@ private fun FeaturedHeroCarousel(
 
     LaunchedEffect(activeItem.id) {
         onResolveSpotlightMeta(activeItem)
+    }
+
+    val isDragged by pagerState.interactionSource.collectIsDraggedAsState()
+    LaunchedEffect(items.size, isDragged, isTrailerPlaying) {
+        if (items.size > 1 && !isDragged && !isTrailerPlaying) {
+            while (true) {
+                delay(6000L)
+                val nextPage = (pagerState.currentPage + 1) % items.size
+                pagerState.animateScrollToPage(nextPage)
+            }
+        }
     }
 
     LaunchedEffect(activeItem.id, primaryTrailer?.id, isHeroInView, allowAutoPlay) {
@@ -1201,6 +1228,7 @@ private fun CustomizeCatalogsSheet(
 private fun CatalogFullBrowserScreen(
     section: CatalogSection,
     compactGrid: Boolean,
+    posterLayout: String = "STANDARD_2",
     onSelectMedia: (StremioMetaPreview) -> Unit,
     onSelectGenre: (String?) -> Unit,
     onLoadMore: () -> Unit,
@@ -1369,7 +1397,25 @@ private fun CatalogFullBrowserScreen(
             }
 
             // Grid content
-            val columns = if (compactGrid) 3 else 2
+            val parsedLayout = remember(posterLayout, compactGrid) {
+                if (posterLayout.isNotBlank()) com.example.data.model.PosterLayout.fromKey(posterLayout)
+                else if (compactGrid) com.example.data.model.PosterLayout.COMPACT_3
+                else com.example.data.model.PosterLayout.STANDARD_2
+            }
+            val columns = when (parsedLayout) {
+                com.example.data.model.PosterLayout.BENTO_4 -> 4
+                com.example.data.model.PosterLayout.COMPACT_3 -> 3
+                com.example.data.model.PosterLayout.STANDARD_2 -> 2
+                com.example.data.model.PosterLayout.CINEMATIC_1 -> 1
+                com.example.data.model.PosterLayout.LIST_DETAILED -> 1
+            }
+            val cardWidth = when (parsedLayout) {
+                com.example.data.model.PosterLayout.BENTO_4 -> 85f
+                com.example.data.model.PosterLayout.COMPACT_3 -> 114f
+                com.example.data.model.PosterLayout.STANDARD_2 -> 165f
+                com.example.data.model.PosterLayout.CINEMATIC_1 -> 320f
+                com.example.data.model.PosterLayout.LIST_DETAILED -> 320f
+            }
             LazyVerticalGrid(
                 state = gridState,
                 columns = GridCells.Fixed(columns),
@@ -1383,7 +1429,7 @@ private fun CatalogFullBrowserScreen(
                 items(sortedItems, key = { "browser_${section.sectionKey}_${it.id}" }) { meta ->
                     PosterMediaCard(
                         item = meta,
-                        widthDp = if (compactGrid) 114f else 165f,
+                        widthDp = cardWidth,
                         onClick = { onSelectMedia(meta) }
                     )
                 }
@@ -1450,6 +1496,7 @@ private fun CatalogFullBrowserScreen(
 private fun GlobalSearchOverlay(
     discoverState: DiscoverUiState,
     compactGrid: Boolean,
+    posterLayout: String = "STANDARD_2",
     onSearchChange: (String) -> Unit,
     onSelectMedia: (StremioMetaPreview) -> Unit,
     onDismiss: () -> Unit
@@ -1701,7 +1748,18 @@ private fun GlobalSearchOverlay(
                 }
             } else if (discoverState.isLoading) {
                 // #080808 Shimmer Skeletons while loading
-                val columns = if (compactGrid) 3 else 2
+                val parsedLayout = remember(posterLayout, compactGrid) {
+                    if (posterLayout.isNotBlank()) com.example.data.model.PosterLayout.fromKey(posterLayout)
+                    else if (compactGrid) com.example.data.model.PosterLayout.COMPACT_3
+                    else com.example.data.model.PosterLayout.STANDARD_2
+                }
+                val columns = when (parsedLayout) {
+                    com.example.data.model.PosterLayout.BENTO_4 -> 4
+                    com.example.data.model.PosterLayout.COMPACT_3 -> 3
+                    com.example.data.model.PosterLayout.STANDARD_2 -> 2
+                    com.example.data.model.PosterLayout.CINEMATIC_1 -> 1
+                    com.example.data.model.PosterLayout.LIST_DETAILED -> 1
+                }
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(columns),
                     modifier = Modifier
@@ -1737,7 +1795,18 @@ private fun GlobalSearchOverlay(
                 }
             } else {
                 // Progressive Results grouped under Addon • Type
-                val columns = if (compactGrid) 3 else 2
+                val parsedLayout = remember(posterLayout, compactGrid) {
+                    if (posterLayout.isNotBlank()) com.example.data.model.PosterLayout.fromKey(posterLayout)
+                    else if (compactGrid) com.example.data.model.PosterLayout.COMPACT_3
+                    else com.example.data.model.PosterLayout.STANDARD_2
+                }
+                val cardWidth = when (parsedLayout) {
+                    com.example.data.model.PosterLayout.BENTO_4 -> 105.dp
+                    com.example.data.model.PosterLayout.COMPACT_3 -> 118.dp
+                    com.example.data.model.PosterLayout.STANDARD_2 -> 142.dp
+                    com.example.data.model.PosterLayout.CINEMATIC_1 -> 180.dp
+                    com.example.data.model.PosterLayout.LIST_DETAILED -> 150.dp
+                }
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
@@ -1759,7 +1828,6 @@ private fun GlobalSearchOverlay(
 
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 items(sec.items, key = { "res_${sec.sectionKey}_${it.id}" }) { meta ->
-                                    val cardWidth = if (compactGrid) 118.dp else 142.dp
                                     PosterMediaCard(
                                         item = meta,
                                         widthDp = cardWidth.value,

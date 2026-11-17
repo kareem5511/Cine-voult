@@ -117,6 +117,7 @@ fun LibraryScreen(
     onDeleteDownload: (String) -> Unit,
     onPlayRequest: (PlaybackRequest) -> Unit,
     onOpenPreview: ((StremioMetaPreview) -> Unit)? = null,
+    posterLayout: String = "STANDARD_2",
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -227,6 +228,7 @@ fun LibraryScreen(
             0 -> WatchlistTab(
                 items = watchlistItems,
                 preferredEngine = preferredEngine,
+                posterLayout = posterLayout,
                 onRemoveItem = onRemoveLibraryItem,
                 onOpenPreview = onOpenPreview,
                 onPlayRequest = onPlayRequest
@@ -279,6 +281,7 @@ fun LibraryScreen(
 private fun WatchlistTab(
     items: List<LibraryMediaItem>,
     preferredEngine: PlaybackEngine,
+    posterLayout: String = "STANDARD_2",
     onRemoveItem: (String) -> Unit,
     onOpenPreview: ((StremioMetaPreview) -> Unit)?,
     onPlayRequest: (PlaybackRequest) -> Unit
@@ -296,8 +299,16 @@ private fun WatchlistTab(
             )
         }
     } else {
+        val parsedLayout = com.example.data.model.PosterLayout.fromKey(posterLayout)
+        val columns = when (parsedLayout) {
+            com.example.data.model.PosterLayout.COMPACT_3 -> 3
+            com.example.data.model.PosterLayout.STANDARD_2 -> 2
+            com.example.data.model.PosterLayout.CINEMATIC_1 -> 1
+            com.example.data.model.PosterLayout.LIST_DETAILED -> 1
+            com.example.data.model.PosterLayout.BENTO_4 -> 4
+        }
         LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+            columns = GridCells.Fixed(columns),
             contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 120.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),

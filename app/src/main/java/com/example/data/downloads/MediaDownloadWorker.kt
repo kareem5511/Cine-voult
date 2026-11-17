@@ -42,7 +42,9 @@ class MediaDownloadWorker(
         val entry = dao.getByKey(downloadKey) ?: return Result.failure()
 
         ensureChannel()
-        setForeground(createForegroundInfo(entry.title, 0, downloadKey.hashCode()))
+        runCatching {
+            setForeground(createForegroundInfo(entry.title, 0, downloadKey.hashCode()))
+        }
 
         val offlineDir = File(applicationContext.filesDir, "offline_media").apply { mkdirs() }
         val ext = guessExtension(entry.streamUrl)
@@ -106,7 +108,9 @@ class MediaDownloadWorker(
                                     localPath = outFile.absolutePath,
                                     subPath = ""
                                 )
-                                setForeground(createForegroundInfo(entry.title, pct, downloadKey.hashCode()))
+                                runCatching {
+                                    setForeground(createForegroundInfo(entry.title, pct, downloadKey.hashCode()))
+                                }
                             }
                         }
                     }
@@ -238,6 +242,7 @@ class OfflineDownloadManager(private val context: Context) {
 
         val request = OneTimeWorkRequestBuilder<MediaDownloadWorker>()
             .setConstraints(constraints)
+            .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .setInputData(
                 Data.Builder()
                     .putString(MediaDownloadWorker.KEY_DOWNLOAD_KEY, downloadKey)

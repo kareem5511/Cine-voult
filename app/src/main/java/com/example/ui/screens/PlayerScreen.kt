@@ -174,7 +174,21 @@ fun PlayerScreen(
         context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
     }
 
-    var activeEngine by remember { mutableStateOf(PlaybackEngine.fromKey(request.preferredEngine)) }
+    val initialEngine = remember(request.preferredEngine, request.streamUrl) {
+        val configured = PlaybackEngine.fromKey(request.preferredEngine)
+        if (configured == PlaybackEngine.AUTO) {
+            val url = request.streamUrl.lowercase()
+            if (url.contains(".mkv") || url.contains(".webm") || url.contains("mkv") ||
+                url.contains("dts") || url.contains("truehd") || url.contains(".ass") || url.contains(".ssa")) {
+                PlaybackEngine.LIBMPV
+            } else {
+                PlaybackEngine.EXOPLAYER
+            }
+        } else {
+            configured
+        }
+    }
+    var activeEngine by remember { mutableStateOf(initialEngine) }
     var activeMediaKey by remember { mutableStateOf(request.mediaKey) }
     var activeTitle by remember { mutableStateOf(request.title) }
     val baseShowTitle = remember(request.title) {

@@ -28,6 +28,7 @@ class LibMpvController(private val context: Context) : MPVLib.EventObserver {
     private var attachedSubUrl: String = ""
     private var subtitlesDisabledByPref: Boolean = false
     private var preferredSubtitleLang: String = "en"
+    private var currentPreferredAudioLang: String = ""
 
     fun initialize(
         streamUrl: String,
@@ -40,6 +41,7 @@ class LibMpvController(private val context: Context) : MPVLib.EventObserver {
         pendingUrl = streamUrl
         pendingSeekMs = initialPositionMs
         preferredSubtitleLang = preferences.preferredSubtitleLang
+        currentPreferredAudioLang = preferences.preferredAudioLang
         subtitlesDisabledByPref = preferredSubtitleLang.equals("off", ignoreCase = true)
         externalSubtitles = buildList {
             if (localSubtitleUri.isNotBlank()) {
@@ -64,15 +66,23 @@ class LibMpvController(private val context: Context) : MPVLib.EventObserver {
 
         val initResult = runCatching {
             if (!initialized) {
+                val cpuThreads = Runtime.getRuntime().availableProcessors().coerceIn(2, 6).toString()
                 MPVLib.create(context.applicationContext)
                 MPVLib.setOptionString("config", "no")
                 MPVLib.setOptionString("vo", "gpu")
                 MPVLib.setOptionString("gpu-context", "android")
                 MPVLib.setOptionString("opengl-es", "yes")
-                MPVLib.setOptionString("hwdec", if (hardwareDecoding) "mediacodec-copy" else "no")
+                MPVLib.setOptionString("hwdec", if (hardwareDecoding) "mediacodec,mediacodec-copy" else "no")
+                MPVLib.setOptionString("vd-lavc-threads", cpuThreads)
+                MPVLib.setOptionString("vd-lavc-dr", "yes")
+                MPVLib.setOptionString("demuxer-max-bytes", "67108864")
+                MPVLib.setOptionString("demuxer-readahead-secs", "20")
+                MPVLib.setOptionString("audio-pitch-correction", "yes")
                 MPVLib.setOptionString("ao", "audiotrack,opensles")
                 MPVLib.setOptionString("keep-open", "yes")
                 MPVLib.setOptionString("ytdl", "no")
+                val shaderCache = java.io.File(context.cacheDir, "mpv_shaders").apply { mkdirs() }
+                MPVLib.setOptionString("gpu-shader-cache-dir", shaderCache.absolutePath)
                 if (alang.isNotBlank()) MPVLib.setOptionString("alang", alang)
                 if (subtitlesDisabledByPref) {
                     MPVLib.setOptionString("sid", "no")
@@ -92,7 +102,7 @@ class LibMpvController(private val context: Context) : MPVLib.EventObserver {
                 MPVLib.observeProperty("cache-speed", MPV_FORMAT_INT64)
                 initialized = true
             } else {
-                MPVLib.setPropertyString("hwdec", if (hardwareDecoding) "mediacodec-copy" else "no")
+                MPVLib.setPropertyString("hwdec", if (hardwareDecoding) "mediacodec,mediacodec-copy" else "no")
                 if (alang.isNotBlank()) MPVLib.setPropertyString("alang", alang)
                 if (subtitlesDisabledByPref) {
                     MPVLib.setPropertyString("sid", "no")
@@ -392,6 +402,24 @@ class LibMpvController(private val context: Context) : MPVLib.EventObserver {
                     )
                 }
             }
+
+            val prefLang = currentPreferredAudioLang
+            if (prefLang.isNotBlank() && !prefLang.equals("auto", ignoreCase = true)) {
+                val hasMatchingSelectedAudio = audio.any { it.isSelected && LanguageCodeMatcher.matches(it.language, prefLang) }
+                if (!hasMatchingSelectedAudio) {
+                    val candidate = audio.firstOrNull {
+                        LanguageCodeMatcher.matches(it.language, prefLang) ||
+                            LanguageCodeMatcher.matches(it.label, prefLang)
+                    }
+                    if (candidate != null && !candidate.isSelected) {
+                        MPVLib.setPropertyString("aid", candidate.id)
+                        audio.forEachIndexed { idx, tr ->
+                            audio[idx] = tr.copy(isSelected = tr.id == candidate.id)
+                        }
+                    }
+                }
+            }
+
             val mergedSubs = buildList {
                 addAll(embeddedSubs)
                 externalSubtitles.forEachIndexed { idx, ext ->

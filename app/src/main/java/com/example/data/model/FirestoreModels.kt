@@ -48,7 +48,7 @@ data class LibraryMediaItem(
 data class UserPreferences(
     @DocumentId val id: String = "",
     val userId: String = "",
-    val preferredEngine: String = "EXOPLAYER", // EXOPLAYER | LIBMPV
+    val preferredEngine: String = "AUTO", // AUTO | EXOPLAYER | LIBMPV
     val hardwareDecoding: Boolean = true,
     val subtitleFontSizeSp: Int = 18,
     val subtitleColorHex: String = "#FFFFFF",
@@ -58,6 +58,8 @@ data class UserPreferences(
     val preferredAudioLang: String = "en",
     val accentPreset: String = "TUNGSTEN_GOLD",
     val compactGrid: Boolean = false,
+    val posterLayout: String = "STANDARD_2", // COMPACT_3 | STANDARD_2 | CINEMATIC_1 | LIST_DETAILED | BENTO_4
+    val uiTextScale: String = "NORMAL", // SMALL | NORMAL | LARGE | EXTRA_LARGE
     val amoledBlack: Boolean = false,
     val autoPlayTrailers: String = "WIFI_ONLY", // OFF | WIFI_ONLY | ALWAYS
     val autoFetchLocalMetadata: Boolean = true,
@@ -75,12 +77,38 @@ data class UserPreferences(
 )
 
 enum class PlaybackEngine(val key: String, val displayName: String) {
+    AUTO("AUTO", "Auto (Smart Selection)"),
     EXOPLAYER("EXOPLAYER", "Media3 ExoPlayer"),
     LIBMPV("LIBMPV", "libmpv (MPV)");
 
     companion object {
         fun fromKey(key: String?): PlaybackEngine =
-            entries.firstOrNull { it.key == key } ?: EXOPLAYER
+            entries.firstOrNull { it.key == key } ?: AUTO
+    }
+}
+
+enum class PosterLayout(val key: String, val label: String, val columns: Int) {
+    COMPACT_3("COMPACT_3", "Compact (3 Columns)", 3),
+    STANDARD_2("STANDARD_2", "Standard (2 Columns)", 2),
+    CINEMATIC_1("CINEMATIC_1", "Cinematic Cards", 1),
+    LIST_DETAILED("LIST_DETAILED", "Detailed List", 1),
+    BENTO_4("BENTO_4", "Bento Grid (4 Columns)", 4);
+
+    companion object {
+        fun fromKey(key: String?): PosterLayout =
+            entries.firstOrNull { it.key == key } ?: STANDARD_2
+    }
+}
+
+enum class UiTextScale(val key: String, val label: String, val scale: Float) {
+    SMALL("SMALL", "Small Text", 0.88f),
+    NORMAL("NORMAL", "Default", 1.0f),
+    LARGE("LARGE", "Large Text", 1.15f),
+    EXTRA_LARGE("EXTRA_LARGE", "Extra Large", 1.30f);
+
+    companion object {
+        fun fromKey(key: String?): UiTextScale =
+            entries.firstOrNull { it.key == key } ?: NORMAL
     }
 }
 
@@ -94,3 +122,4 @@ enum class TrailerAutoPlayMode(val key: String, val label: String) {
             entries.firstOrNull { it.key == key } ?: WIFI_ONLY
     }
 }
+

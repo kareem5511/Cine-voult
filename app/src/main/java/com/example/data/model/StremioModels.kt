@@ -139,6 +139,27 @@ data class StremioMetaResponse(
     val meta: StremioMetaDetail? = null
 )
 
+fun parseYouTubeVideoId(input: String?): String? {
+    val raw = input?.trim() ?: return null
+    if (raw.isBlank()) return null
+    if (!raw.startsWith("http://", ignoreCase = true) && !raw.startsWith("https://", ignoreCase = true) && !raw.contains("/") && !raw.contains("?")) {
+        return raw.take(32)
+    }
+    if (raw.contains("youtu.be/", ignoreCase = true)) {
+        val after = raw.substringAfter("youtu.be/").substringBefore('?').substringBefore('&').substringBefore('/')
+        if (after.isNotBlank()) return after.take(32)
+    }
+    if (raw.contains("v=", ignoreCase = true)) {
+        val after = raw.substringAfter("v=").substringBefore('&').substringBefore('/')
+        if (after.isNotBlank()) return after.take(32)
+    }
+    if (raw.contains("/embed/", ignoreCase = true)) {
+        val after = raw.substringAfter("/embed/").substringBefore('?').substringBefore('&').substringBefore('/')
+        if (after.isNotBlank()) return after.take(32)
+    }
+    return null
+}
+
 @JsonClass(generateAdapter = true)
 data class StremioMetaDetail(
     val id: String = "",
@@ -165,14 +186,16 @@ data class StremioMetaDetail(
         val allStreams = (trailerStreams.orEmpty() + previewFallback?.trailerStreams.orEmpty())
         allStreams.forEachIndexed { idx, ts ->
             val direct = ts.url?.trim()?.takeIf { it.isNotEmpty() }
-            val yt = ts.ytId?.trim()?.takeIf { it.isNotEmpty() }
-            val key = direct ?: yt ?: return@forEachIndexed
+            val rawYt = ts.ytId?.trim()?.takeIf { it.isNotEmpty() }
+            val yt = parseYouTubeVideoId(rawYt) ?: parseYouTubeVideoId(direct)
+            val effectiveDirect = if (yt == null) direct else null
+            val key = effectiveDirect ?: yt ?: return@forEachIndexed
             if (seenKeys.add(key)) {
                 result += TrailerOption(
                     id = "ts_${idx}_${key.hashCode()}",
                     title = ts.title?.takeIf { it.isNotBlank() } ?: "Official Trailer",
-                    typeLabel = if (direct != null) "HD Stream" else "YouTube",
-                    directUrl = direct,
+                    typeLabel = if (effectiveDirect != null) "HD Stream" else "YouTube",
+                    directUrl = effectiveDirect,
                     ytId = yt
                 )
             }
@@ -181,14 +204,16 @@ data class StremioMetaDetail(
         val allTrailers = (trailers.orEmpty() + previewFallback?.trailers.orEmpty())
         allTrailers.forEachIndexed { idx, tr ->
             val src = tr.source.trim().takeIf { it.isNotEmpty() } ?: return@forEachIndexed
-            if (seenKeys.add(src)) {
-                val isDirect = src.startsWith("http://", ignoreCase = true) || src.startsWith("https://", ignoreCase = true)
+            val yt = parseYouTubeVideoId(src)
+            val effectiveDirect = if (yt == null && (src.startsWith("http://", ignoreCase = true) || src.startsWith("https://", ignoreCase = true))) src else null
+            val key = effectiveDirect ?: yt ?: return@forEachIndexed
+            if (seenKeys.add(key)) {
                 result += TrailerOption(
-                    id = "tr_${idx}_${src.hashCode()}",
+                    id = "tr_${idx}_${key.hashCode()}",
                     title = "${tr.type.ifBlank { "Trailer" }} #${idx + 1}",
                     typeLabel = tr.type.ifBlank { "Trailer" },
-                    directUrl = if (isDirect) src else null,
-                    ytId = if (isDirect) null else src
+                    directUrl = effectiveDirect,
+                    ytId = yt
                 )
             }
         }
