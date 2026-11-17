@@ -43,6 +43,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
@@ -74,13 +75,27 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import android.content.Context
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.material.icons.rounded.FilterList
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -176,11 +191,86 @@ fun DiscoverScreen(
     val isAmoled = LocalIsAmoledBlack.current
     val scrimBaseColor = if (isAmoled) Color.Black else MaterialTheme.colorScheme.background
 
+    androidx.activity.compose.BackHandler(enabled = searchExpanded) {
+        searchExpanded = false
+    }
+    androidx.activity.compose.BackHandler(enabled = activeBrowseSectionKey != null) {
+        activeBrowseSectionKey = null
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
+        // Minimal Floating Top Controls (Frosted-Glass Search & Spin Refresh)
+        val infiniteRefresh = rememberInfiniteTransition(label = "refresh_spin")
+        val spinRotation by infiniteRefresh.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = androidx.compose.animation.core.tween(900, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "spin_angle"
+        )
+
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .padding(top = 10.dp, end = 16.dp)
+                .zIndex(45f),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                color = Color.Black.copy(alpha = 0.45f),
+                shape = CircleShape,
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .clickable { searchExpanded = true }
+                    .testTag("discover_floating_search_button")
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Rounded.Search,
+                        contentDescription = "Search",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            Surface(
+                color = Color.Black.copy(alpha = 0.45f),
+                shape = CircleShape,
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .clickable(enabled = !discoverState.isLoading) { onRefresh() }
+                    .testTag("discover_floating_refresh_button")
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Rounded.Refresh,
+                        contentDescription = "Refresh catalogs",
+                        tint = Color.White,
+                        modifier = Modifier
+                            .size(20.dp)
+                            .graphicsLayer {
+                                if (discoverState.isLoading) {
+                                    rotationZ = spinRotation
+                                }
+                            }
+                    )
+                }
+            }
+        }
+
         LazyColumn(
             state = listState,
             modifier = Modifier
@@ -196,10 +286,6 @@ fun DiscoverScreen(
                         spotlightMetaMap = spotlightMetaMap,
                         autoPlayTrailers = autoPlayTrailers,
                         isHeroInView = isHeroInView,
-                        searchExpanded = searchExpanded,
-                        searchQuery = discoverState.searchQuery,
-                        onSearchQueryChange = onSearchChange,
-                        onToggleSearch = { expanded -> searchExpanded = expanded },
                         onResolveSpotlightMeta = onResolveSpotlightMeta,
                         onWatchClick = onSelectMedia,
                         onSaveClick = onQuickFavorite
@@ -227,7 +313,7 @@ fun DiscoverScreen(
                     }
                 }
             } else {
-                // Search / No-Hero Input + Type Filters (clean top spacing below status bar scrim)
+                // Top spacing below status bar scrim + Type Filters
                 item {
                     Column(
                         modifier = Modifier
@@ -236,39 +322,6 @@ fun DiscoverScreen(
                             .padding(start = 16.dp, top = 22.dp, end = 16.dp, bottom = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-
-                        OutlinedTextField(
-                            value = discoverState.searchQuery,
-                            onValueChange = onSearchChange,
-                            placeholder = { Text("Search all Stremio catalogs...") },
-                            leadingIcon = {
-                                Icon(Icons.Rounded.Search, contentDescription = "Search")
-                            },
-                            trailingIcon = {
-                                if (discoverState.searchQuery.isNotBlank() || searchExpanded) {
-                                    IconButton(
-                                        onClick = {
-                                            onSearchChange("")
-                                            searchExpanded = false
-                                        }
-                                    ) {
-                                        Icon(Icons.Rounded.Clear, contentDescription = "Clear search")
-                                    }
-                                }
-                            },
-                            singleLine = true,
-                            shape = RoundedCornerShape(16.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("discover_search_input")
-                        )
-
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(availableTypes, key = { it.first }) { (key, label) ->
                                 FilterChip(
@@ -398,11 +451,11 @@ fun DiscoverScreen(
                 key = { it.sectionKey },
                 contentType = { "catalog_section" }
             ) { section ->
-                val sectionTitle = remember(section.catalogTitle, section.type) {
+                val typeLabel = if (section.type.equals("series", ignoreCase = true)) "Series" else "Movies"
+                val sectionTitle = remember(section.catalogTitle, typeLabel) {
                     if (section.catalogTitle.contains("•") || section.catalogTitle.contains("(")) {
                         section.catalogTitle
                     } else {
-                        val typeLabel = if (section.type.equals("series", ignoreCase = true)) "Series" else "Movies"
                         "${section.catalogTitle} • $typeLabel"
                     }
                 }
@@ -418,33 +471,17 @@ fun DiscoverScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
+                            Text(
+                                text = sectionTitle,
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 20.sp
+                                ),
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f).padding(end = 8.dp)
-                            ) {
-                                Text(
-                                    text = section.catalogTitle,
-                                    style = MaterialTheme.typography.titleLarge.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 22.sp
-                                    ),
-                                    color = Color.White,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                if (!section.catalogTitle.contains("•") && !section.catalogTitle.contains("(")) {
-                                    val typeLabel = if (section.type.equals("series", ignoreCase = true)) "Series" else "Movies"
-                                    Text(
-                                        text = " • $typeLabel",
-                                        style = MaterialTheme.typography.titleLarge.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 22.sp
-                                        ),
-                                        color = Color.White,
-                                        maxLines = 1
-                                    )
-                                }
-                            }
+                            )
                             Surface(
                                 color = Color.White.copy(alpha = 0.12f),
                                 shape = CircleShape,
@@ -472,62 +509,21 @@ fun DiscoverScreen(
                         )
                     }
 
-                    // Inline genre strip for catalogs exposing Stremio genre extras
-                    if (section.availableGenres.isNotEmpty()) {
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            item {
-                                FilterChip(
-                                    selected = section.selectedGenre == null,
-                                    onClick = { onSelectCatalogGenre(section.sectionKey, null) },
-                                    label = { Text("All") }
-                                )
-                            }
-                            items(section.availableGenres.take(12), key = { "${section.sectionKey}_g_$it" }) { genre ->
-                                FilterChip(
-                                    selected = section.selectedGenre.equals(genre, ignoreCase = true),
-                                    onClick = { onSelectCatalogGenre(section.sectionKey, genre) },
-                                    label = { Text(genre) }
-                                )
-                            }
-                        }
-                    }
-
-                    val showTrendingRanks = remember(section.sectionKey, section.catalogTitle) {
-                        section.catalogTitle.contains("trending", ignoreCase = true) ||
-                            section.catalogTitle.contains("popular", ignoreCase = true) ||
-                            section.catalogId.contains("trending", ignoreCase = true) ||
-                            section.catalogId.contains("top", ignoreCase = true)
-                    }
                     val cardWidth = if (compactGrid) 118.dp else 142.dp
                     LazyRow(
-                        contentPadding = PaddingValues(
-                            start = if (showTrendingRanks) 24.dp else 16.dp,
-                            end = 16.dp
-                        ),
-                        horizontalArrangement = Arrangement.spacedBy(if (showTrendingRanks) 22.dp else 12.dp)
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        itemsIndexed(
+                        items(
                             items = section.items,
-                            key = { _, meta -> "${section.sectionKey}_${meta.id}" },
-                            contentType = { _, _ -> "poster_card" }
-                        ) { index, meta ->
-                            if (showTrendingRanks && index < 10) {
-                                RankedPosterMediaCard(
-                                    rank = index + 1,
-                                    item = meta,
-                                    widthDp = cardWidth.value,
-                                    onClick = { onSelectMedia(meta) }
-                                )
-                            } else {
-                                PosterMediaCard(
-                                    item = meta,
-                                    widthDp = cardWidth.value,
-                                    onClick = { onSelectMedia(meta) }
-                                )
-                            }
+                            key = { "${section.sectionKey}_${it.id}" },
+                            contentType = { "poster_card" }
+                        ) { meta ->
+                            PosterMediaCard(
+                                item = meta,
+                                widthDp = cardWidth.value,
+                                onClick = { onSelectMedia(meta) }
+                            )
                         }
                     }
                 }
@@ -570,8 +566,9 @@ fun DiscoverScreen(
         discoverState.sections.firstOrNull { it.sectionKey == key }
     }
     if (activeBrowseSection != null) {
-        CatalogFullBrowseSheet(
+        CatalogFullBrowserScreen(
             section = activeBrowseSection,
+            compactGrid = compactGrid,
             onSelectMedia = { meta ->
                 activeBrowseSectionKey = null
                 onSelectMedia(meta)
@@ -585,6 +582,22 @@ fun DiscoverScreen(
             onDismiss = { activeBrowseSectionKey = null }
         )
     }
+
+    if (searchExpanded) {
+        GlobalSearchOverlay(
+            discoverState = discoverState,
+            compactGrid = compactGrid,
+            onSearchChange = onSearchChange,
+            onSelectMedia = { meta ->
+                searchExpanded = false
+                onSelectMedia(meta)
+            },
+            onDismiss = {
+                searchExpanded = false
+                onSearchChange("")
+            }
+        )
+    }
 }
 
 @Composable
@@ -593,10 +606,6 @@ private fun FeaturedHeroCarousel(
     spotlightMetaMap: Map<String, StremioMetaDetail>,
     autoPlayTrailers: String,
     isHeroInView: Boolean,
-    searchExpanded: Boolean,
-    searchQuery: String,
-    onSearchQueryChange: (String) -> Unit,
-    onToggleSearch: (Boolean) -> Unit,
     onResolveSpotlightMeta: (StremioMetaPreview) -> Unit,
     onWatchClick: (StremioMetaPreview) -> Unit,
     onSaveClick: (StremioMetaPreview) -> Unit
@@ -814,7 +823,7 @@ private fun FeaturedHeroCarousel(
                                 modifier = Modifier.testTag("hero_stream_button")
                             ) {
                                 Text(
-                                    text = "View details",
+                                    text = "More details",
                                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                     color = Color.Black
                                 )
@@ -846,114 +855,7 @@ private fun FeaturedHeroCarousel(
                         }
                     }
                 }
-
-                // Clean Floating Search Magnifying Glass Only (expandable into sleek full-width search bar)
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .fillMaxWidth()
-                        .windowInsetsPadding(WindowInsets.statusBars)
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    contentAlignment = Alignment.CenterEnd
-                ) {
-                    if (searchExpanded) {
-                        val searchFocusRequester = remember { FocusRequester() }
-                        LaunchedEffect(Unit) {
-                            runCatching { searchFocusRequester.requestFocus() }
-                        }
-                        Surface(
-                            color = Color.Black.copy(alpha = 0.78f),
-                            shape = RoundedCornerShape(24.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(24.dp))
-                        ) {
-                            OutlinedTextField(
-                                value = searchQuery,
-                                onValueChange = onSearchQueryChange,
-                                placeholder = {
-                                    Text(
-                                        text = "Search all Stremio catalogs...",
-                                        color = Color.White.copy(alpha = 0.6f),
-                                        maxLines = 1
-                                    )
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Search,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                },
-                                trailingIcon = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        if (searchQuery.isNotEmpty()) {
-                                            IconButton(
-                                                onClick = { onSearchQueryChange("") },
-                                                modifier = Modifier.testTag("discover_search_clear_button")
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Rounded.Clear,
-                                                    contentDescription = "Clear search query",
-                                                    tint = Color.White.copy(alpha = 0.78f)
-                                                )
-                                            }
-                                        }
-                                        IconButton(
-                                            onClick = {
-                                                onSearchQueryChange("")
-                                                onToggleSearch(false)
-                                            },
-                                            modifier = Modifier.testTag("discover_search_close_button")
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.Clear,
-                                                contentDescription = "Close search",
-                                                tint = Color.White
-                                            )
-                                        }
-                                    }
-                                },
-                                singleLine = true,
-                                shape = RoundedCornerShape(24.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedContainerColor = Color.Transparent,
-                                    unfocusedContainerColor = Color.Transparent,
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White,
-                                    focusedBorderColor = Color.Transparent,
-                                    unfocusedBorderColor = Color.Transparent
-                                ),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .focusRequester(searchFocusRequester)
-                                    .testTag("discover_search_input")
-                            )
-                        }
-                    } else {
-                        Surface(
-                            color = Color.Black.copy(alpha = 0.45f),
-                            shape = CircleShape,
-                            modifier = Modifier
-                                .size(44.dp)
-                                .border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape)
-                                .clip(CircleShape)
-                                .clickable { onToggleSearch(true) }
-                                .testTag("discover_search_toggle_button")
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Search,
-                                    contentDescription = "Search catalogs",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(21.dp)
-                                )
-                            }
-                        }
-                    }
-                }
             }
-
         }
     }
 }
@@ -1049,20 +951,26 @@ private fun ContinueWatchingCard(
                         .fillMaxWidth()
                         .height(3.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.22f))
+                        .background(Color.White.copy(alpha = 0.25f))
                 ) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(fraction)
                             .height(3.dp)
                             .clip(CircleShape)
-                            .background(accent)
+                            .background(Color.White)
                     )
                 }
+                val remainingLabel = remember(item.watchProgressMs, item.durationMs) {
+                    if (item.durationMs > item.watchProgressMs && item.durationMs > 0L) {
+                        val mins = ((item.durationMs - item.watchProgressMs) / 60_000L).coerceAtLeast(1L)
+                        "${mins}m left"
+                    } else "$percent% watched"
+                }
                 Text(
-                    text = "$percent% watched",
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                    color = Color.White.copy(alpha = 0.82f)
+                    text = remainingLabel,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
+                    color = Color.White.copy(alpha = 0.88f)
                 )
             }
         }
@@ -1289,37 +1197,160 @@ private fun CustomizeCatalogsSheet(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CatalogFullBrowseSheet(
+private fun CatalogFullBrowserScreen(
     section: CatalogSection,
+    compactGrid: Boolean,
     onSelectMedia: (StremioMetaPreview) -> Unit,
     onSelectGenre: (String?) -> Unit,
     onLoadMore: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    androidx.activity.compose.BackHandler(onBack = onDismiss)
+
+    val gridState = rememberLazyGridState()
+    val coroutineScope = rememberCoroutineScope()
+    var sortOption by remember { mutableStateOf("Catalog Order") }
+    var sortMenuExpanded by remember { mutableStateOf(false) }
+
+    val typeLabel = if (section.type.equals("series", ignoreCase = true)) "Series" else "Movies"
+    val displayTitle = remember(section.catalogTitle, typeLabel) {
+        if (section.catalogTitle.contains("•") || section.catalogTitle.contains("(")) {
+            section.catalogTitle
+        } else {
+            "${section.catalogTitle} • $typeLabel"
+        }
+    }
+
+    val sortedItems = remember(section.items, sortOption) {
+        when (sortOption) {
+            "Highest IMDb" -> section.items.sortedByDescending { it.imdbRating?.toDoubleOrNull() ?: 0.0 }
+            "Newest First" -> section.items.sortedByDescending { it.year?.filter { c -> c.isDigit() }?.toIntOrNull() ?: 0 }
+            else -> section.items
+        }
+    }
+
+    val showBackToTop by remember {
+        derivedStateOf { gridState.firstVisibleItemIndex > 4 }
+    }
+
+    LaunchedEffect(gridState, sortedItems.size) {
+        snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
+            .collect { lastIndex ->
+                if (lastIndex != null && lastIndex >= sortedItems.size - 4 && section.canLoadMore && !section.isLoadingMore) {
+                    onLoadMore()
+                }
+            }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .zIndex(90f)
+            .testTag("catalog_full_browser")
+    ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .fillMaxSize()
+                .padding(horizontal = 16.dp)
         ) {
-            Column {
-                Text(
-                    text = section.catalogTitle,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "${section.addonName} • ${section.items.size} titles",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.secondary
-                )
+            // Sticky Header
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Surface(
+                    color = Color.White.copy(alpha = 0.12f),
+                    shape = CircleShape,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onDismiss)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = displayTitle,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        ),
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "${section.addonName} • ${section.items.size} titles",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.65f)
+                    )
+                }
+
+                // Sort Dropdown Button
+                Box {
+                    Surface(
+                        color = Color.White.copy(alpha = 0.10f),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { sortMenuExpanded = true }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.FilterList,
+                                contentDescription = "Sort",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = sortOption,
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                                color = Color.White
+                            )
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = sortMenuExpanded,
+                        onDismissRequest = { sortMenuExpanded = false }
+                    ) {
+                        listOf("Catalog Order", "Highest IMDb", "Newest First").forEach { opt ->
+                            DropdownMenuItem(
+                                text = { Text(opt) },
+                                onClick = {
+                                    sortOption = opt
+                                    sortMenuExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
             }
 
+            // Genre strip
             if (section.availableGenres.isNotEmpty()) {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                LazyRow(
+                    modifier = Modifier.padding(bottom = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     item {
                         FilterChip(
                             selected = section.selectedGenre == null,
@@ -1327,7 +1358,7 @@ private fun CatalogFullBrowseSheet(
                             label = { Text("All") }
                         )
                     }
-                    items(section.availableGenres, key = { "modal_g_$it" }) { genre ->
+                    items(section.availableGenres, key = { "browser_g_$it" }) { genre ->
                         FilterChip(
                             selected = section.selectedGenre.equals(genre, ignoreCase = true),
                             onClick = { onSelectGenre(genre) },
@@ -1337,31 +1368,408 @@ private fun CatalogFullBrowseSheet(
                 }
             }
 
+            // Grid content
+            val columns = if (compactGrid) 3 else 2
             LazyVerticalGrid(
-                columns = GridCells.Adaptive(104.dp),
-                modifier = Modifier.height(420.dp),
+                state = gridState,
+                columns = GridCells.Fixed(columns),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
-                contentPadding = PaddingValues(bottom = 16.dp)
+                contentPadding = PaddingValues(top = 4.dp, bottom = 80.dp)
             ) {
-                items(section.items, key = { "grid_${section.sectionKey}_${it.id}" }) { meta ->
+                items(sortedItems, key = { "browser_${section.sectionKey}_${it.id}" }) { meta ->
                     PosterMediaCard(
                         item = meta,
-                        widthDp = 110f,
+                        widthDp = if (compactGrid) 114f else 165f,
                         onClick = { onSelectMedia(meta) }
                     )
                 }
+
                 if (section.canLoadMore) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         Box(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            OutlinedButton(
-                                onClick = onLoadMore,
-                                enabled = !section.isLoadingMore
-                            ) {
-                                Text(if (section.isLoadingMore) "Loading..." else "Load More")
+                            if (section.isLoadingMore) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(28.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    strokeWidth = 2.5.dp
+                                )
+                            } else {
+                                OutlinedButton(onClick = onLoadMore) {
+                                    Text("Load More")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Floating Back-to-Top Button
+        AnimatedVisibility(
+            visible = showBackToTop,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 32.dp, end = 20.dp),
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            Surface(
+                color = MaterialTheme.colorScheme.primary,
+                shape = CircleShape,
+                shadowElevation = 6.dp,
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(CircleShape)
+                    .clickable {
+                        coroutineScope.launch { gridState.animateScrollToItem(0) }
+                    }
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Rounded.ArrowUpward,
+                        contentDescription = "Back to top",
+                        tint = Color.Black,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GlobalSearchOverlay(
+    discoverState: DiscoverUiState,
+    compactGrid: Boolean,
+    onSearchChange: (String) -> Unit,
+    onSelectMedia: (StremioMetaPreview) -> Unit,
+    onDismiss: () -> Unit
+) {
+    androidx.activity.compose.BackHandler(onBack = onDismiss)
+
+    val context = LocalContext.current
+    val focusRequester = remember { FocusRequester() }
+    var selectedTab by remember { mutableStateOf("all") }
+    var recentSearches by remember { mutableStateOf(getRecentSearches(context)) }
+
+    val popularSearches = remember {
+        listOf("Interstellar", "Severance", "The Batman", "Dune", "Breaking Bad", "Arcane", "Shogun", "Inception")
+    }
+
+    LaunchedEffect(Unit) {
+        delay(120)
+        focusRequester.requestFocus()
+    }
+
+    val allResults = remember(discoverState.sections) {
+        discoverState.sections.flatMap { it.items }.distinctBy { it.id }
+    }
+    val movieResults = remember(discoverState.sections) {
+        discoverState.sections.filter { it.type.equals("movie", ignoreCase = true) }
+            .flatMap { it.items }.distinctBy { it.id }
+    }
+    val seriesResults = remember(discoverState.sections) {
+        discoverState.sections.filter { it.type.equals("series", ignoreCase = true) }
+            .flatMap { it.items }.distinctBy { it.id }
+    }
+
+    val displayedSections = remember(discoverState.sections, selectedTab) {
+        if (selectedTab == "all") {
+            discoverState.sections.filter { it.items.isNotEmpty() }
+        } else {
+            discoverState.sections.filter { it.type.equals(selectedTab, ignoreCase = true) && it.items.isNotEmpty() }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .zIndex(100f)
+            .testTag("global_search_overlay")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp)
+        ) {
+            // Top Bar: Back, Input, Clear
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Surface(
+                    color = Color.White.copy(alpha = 0.12f),
+                    shape = CircleShape,
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onDismiss)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = discoverState.searchQuery,
+                    onValueChange = onSearchChange,
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(focusRequester),
+                    placeholder = {
+                        Text(
+                            text = "Search movies, series, anime...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.45f)
+                        )
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color(0xFF0D0D0D),
+                        unfocusedContainerColor = Color(0xFF0D0D0D),
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.12f),
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    ),
+                    trailingIcon = {
+                        if (discoverState.searchQuery.isNotBlank()) {
+                            IconButton(onClick = { onSearchChange("") }) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Clear,
+                                    contentDescription = "Clear search",
+                                    tint = Color.White.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                )
+            }
+
+            // Sticky Filter Tabs with Live Counts
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = selectedTab == "all",
+                    onClick = { selectedTab = "all" },
+                    label = { Text("All (${allResults.size})") }
+                )
+                FilterChip(
+                    selected = selectedTab == "movie",
+                    onClick = { selectedTab = "movie" },
+                    label = { Text("Movies (${movieResults.size})") }
+                )
+                FilterChip(
+                    selected = selectedTab == "series",
+                    onClick = { selectedTab = "series" },
+                    label = { Text("Series (${seriesResults.size})") }
+                )
+            }
+
+            // Body: Empty State (Recent / Popular) OR Results Grid
+            if (discoverState.searchQuery.isBlank()) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f),
+                    contentPadding = PaddingValues(vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    if (recentSearches.isNotEmpty()) {
+                        item {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Recent Searches",
+                                        style = MaterialTheme.typography.titleMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 15.sp
+                                        ),
+                                        color = Color.White
+                                    )
+                                    TextButton(onClick = {
+                                        clearRecentSearches(context)
+                                        recentSearches = emptyList()
+                                    }) {
+                                        Text("Clear All", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+                                    }
+                                }
+
+                                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    items(recentSearches, key = { "recent_$it" }) { query ->
+                                        Surface(
+                                            color = Color(0xFF161616),
+                                            shape = RoundedCornerShape(20.dp),
+                                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+                                            modifier = Modifier.clickable { onSearchChange(query) }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(start = 12.dp, top = 6.dp, bottom = 6.dp, end = 6.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Text(
+                                                    text = query,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = Color.White
+                                                )
+                                                IconButton(
+                                                    onClick = {
+                                                        removeRecentSearch(context, query)
+                                                        recentSearches = getRecentSearches(context)
+                                                    },
+                                                    modifier = Modifier.size(18.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Rounded.Clear,
+                                                        contentDescription = "Remove",
+                                                        tint = Color.White.copy(alpha = 0.5f),
+                                                        modifier = Modifier.size(14.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = "Popular Searches",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp
+                                ),
+                                color = Color.White
+                            )
+
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(popularSearches, key = { "pop_$it" }) { term ->
+                                    Surface(
+                                        color = Color(0xFF161616),
+                                        shape = RoundedCornerShape(20.dp),
+                                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+                                        modifier = Modifier.clickable {
+                                            saveRecentSearch(context, term)
+                                            recentSearches = getRecentSearches(context)
+                                            onSearchChange(term)
+                                        }
+                                    ) {
+                                        Text(
+                                            text = term,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = Color.White.copy(alpha = 0.85f),
+                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if (discoverState.isLoading) {
+                // #080808 Shimmer Skeletons while loading
+                val columns = if (compactGrid) 3 else 2
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(columns),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    contentPadding = PaddingValues(vertical = 12.dp)
+                ) {
+                    items(6) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(2f / 3f)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(Color(0xFF080808))
+                                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(18.dp))
+                        )
+                    }
+                }
+            } else if (displayedSections.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No results found for \"${discoverState.searchQuery}\"",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color.White.copy(alpha = 0.6f)
+                    )
+                }
+            } else {
+                // Progressive Results grouped under Addon • Type
+                val columns = if (compactGrid) 3 else 2
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f),
+                    contentPadding = PaddingValues(vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
+                    items(displayedSections, key = { "search_sec_${it.sectionKey}" }) { sec ->
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            val secTypeLabel = if (sec.type.equals("series", ignoreCase = true)) "Series" else "Movies"
+                            Text(
+                                text = "${sec.addonName} • $secTypeLabel (${sec.items.size})",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                ),
+                                color = Color.White
+                            )
+
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                items(sec.items, key = { "res_${sec.sectionKey}_${it.id}" }) { meta ->
+                                    val cardWidth = if (compactGrid) 118.dp else 142.dp
+                                    PosterMediaCard(
+                                        item = meta,
+                                        widthDp = cardWidth.value,
+                                        onClick = {
+                                            saveRecentSearch(context, discoverState.searchQuery.trim())
+                                            recentSearches = getRecentSearches(context)
+                                            onSelectMedia(meta)
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -1370,3 +1778,34 @@ private fun CatalogFullBrowseSheet(
         }
     }
 }
+
+// ---- Search History Persistence Helpers ----
+private fun getRecentSearches(context: Context): List<String> {
+    val prefs = context.getSharedPreferences("streamflow_search_history", Context.MODE_PRIVATE)
+    val raw = prefs.getString("recent_queries", null) ?: return emptyList()
+    return raw.split("|||").filter { it.isNotBlank() }
+}
+
+private fun saveRecentSearch(context: Context, query: String) {
+    if (query.isBlank()) return
+    val prefs = context.getSharedPreferences("streamflow_search_history", Context.MODE_PRIVATE)
+    val current = getRecentSearches(context).toMutableList()
+    current.remove(query)
+    current.add(0, query)
+    val trimmed = current.take(10).joinToString("|||")
+    prefs.edit().putString("recent_queries", trimmed).apply()
+}
+
+private fun removeRecentSearch(context: Context, query: String) {
+    val prefs = context.getSharedPreferences("streamflow_search_history", Context.MODE_PRIVATE)
+    val current = getRecentSearches(context).toMutableList()
+    current.remove(query)
+    val trimmed = current.joinToString("|||")
+    prefs.edit().putString("recent_queries", trimmed).apply()
+}
+
+private fun clearRecentSearches(context: Context) {
+    val prefs = context.getSharedPreferences("streamflow_search_history", Context.MODE_PRIVATE)
+    prefs.edit().remove("recent_queries").apply()
+}
+

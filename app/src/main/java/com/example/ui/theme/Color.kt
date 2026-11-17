@@ -13,27 +13,27 @@ val SlateOutline = Color(0xFF2F394D)
 val AmoledBg = Color(0xFF000000)
 val AmoledCard = Color(0xFF080808)
 val AmoledSurfaceElevated = Color(0xFF101010)
-val AmoledSurfaceHighest = Color(0xFF181818)
+val AmoledSurfaceHighest = Color(0xFF161616)
 val AmoledOutline = Color(0xFF242424)
 
 val TextPrimary = Color(0xFFF2F4F8)
 val TextSecondary = Color(0xFFA8B3C7)
 val TextMuted = Color(0xFF6E7B91)
 
-// Accent Presets (Synced via UserPreferences)
-val TungstenGold = Color(0xFFF5B74F)
-val TungstenGoldDark = Color(0xFF422C00)
-val CinemaCyan = Color(0xFF48C9E8)
-val CinemaCyanDark = Color(0xFF003642)
-val CrimsonVelvet = Color(0xFFF05A7E)
-val CrimsonVelvetDark = Color(0xFF4D0A1D)
-val EmeraldNoir = Color(0xFF3DD68C)
+// 4 Accent Themes (Synced via UserPreferences)
+val EmeraldNoir = Color(0xFF00DC82)
 val EmeraldNoirDark = Color(0xFF00391F)
+val TungstenGold = Color(0xFFF5A623)
+val TungstenGoldDark = Color(0xFF422C00)
+val CinemaCyan = Color(0xFF00E5FF)
+val CinemaCyanDark = Color(0xFF003642)
+val CrimsonVelvet = Color(0xFFE50914)
+val CrimsonVelvetDark = Color(0xFF4D0A1D)
 
 val ErrorRed = Color(0xFFFF6B6B)
 val ErrorContainerDark = Color(0xFF4F1418)
-val SuccessGreen = Color(0xFF3DD68C)
-val WarningAmber = Color(0xFFFFB84D)
+val SuccessGreen = Color(0xFF00DC82)
+val WarningAmber = Color(0xFFF5A623)
 
 enum class AccentPreset(
     val key: String,
@@ -44,6 +44,15 @@ enum class AccentPreset(
     val onSecondary: Color,
     val surfaceSwatch: Color
 ) {
+    EMERALD_NOIR(
+        key = "EMERALD_NOIR",
+        label = "Emerald Noir",
+        primary = EmeraldNoir,
+        onPrimary = EmeraldNoirDark,
+        secondary = CinemaCyan,
+        onSecondary = CinemaCyanDark,
+        surfaceSwatch = Color(0xFF0E241B)
+    ),
     TUNGSTEN_GOLD(
         key = "TUNGSTEN_GOLD",
         label = "Tungsten Gold",
@@ -70,19 +79,10 @@ enum class AccentPreset(
         secondary = TungstenGold,
         onSecondary = TungstenGoldDark,
         surfaceSwatch = Color(0xFF2D121B)
-    ),
-    EMERALD_NOIR(
-        key = "EMERALD_NOIR",
-        label = "Emerald Noir",
-        primary = EmeraldNoir,
-        onPrimary = EmeraldNoirDark,
-        secondary = CinemaCyan,
-        onSecondary = CinemaCyanDark,
-        surfaceSwatch = Color(0xFF0E241B)
     );
 
     companion object {
         fun fromKey(key: String?): AccentPreset =
-            entries.firstOrNull { it.key == key } ?: TUNGSTEN_GOLD
+            entries.firstOrNull { it.key == key } ?: EMERALD_NOIR
     }
 }

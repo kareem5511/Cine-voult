@@ -274,9 +274,11 @@ data class StremioStream(
             lower.contains(".mp4") -> badges.add("MP4")
         }
 
+        val isDownscaled4K = lower.contains("ds4k") || lower.contains("ds-4k") || lower.contains("downscaled from 4k")
+        val isTrue4K = !isDownscaled4K && (lower.contains("2160p") || Regex("""\b4k\b""").containsMatchIn(lower) || lower.contains("uhd"))
         when {
-            lower.contains("2160p") || lower.contains("4k") || lower.contains("uhd") -> badges.add("4K")
-            lower.contains("1080p") || lower.contains("fhd") -> badges.add("1080p")
+            isTrue4K -> badges.add("4K")
+            lower.contains("1080p") || lower.contains("fhd") || isDownscaled4K -> badges.add("1080p")
             lower.contains("720p") || lower.contains(" hd") -> badges.add("720p")
             lower.contains("480p") -> badges.add("480p")
         }

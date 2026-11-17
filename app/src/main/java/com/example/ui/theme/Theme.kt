@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 val LocalIsAmoledBlack = staticCompositionLocalOf { false }
-val LocalAccentPreset = staticCompositionLocalOf { AccentPreset.TUNGSTEN_GOLD }
+val LocalAccentPreset = staticCompositionLocalOf { AccentPreset.EMERALD_NOIR }
 
 val CineVaultShapes = Shapes(
     extraSmall = RoundedCornerShape(6.dp),
@@ -33,7 +33,7 @@ val CineVaultShapes = Shapes(
 
 @Composable
 fun CineVaultTheme(
-    accentPreset: AccentPreset = AccentPreset.TUNGSTEN_GOLD,
+    accentPreset: AccentPreset = AccentPreset.EMERALD_NOIR,
     amoledBlack: Boolean = false,
     content: @Composable () -> Unit
 ) {
@@ -57,7 +57,7 @@ fun CineVaultTheme(
         surfaceContainer = if (amoledBlack) AmoledCard else SlateSurfaceElevated,
         surfaceContainerHigh = if (amoledBlack) AmoledSurfaceElevated else SlateSurfaceHighest,
         outline = if (amoledBlack) AmoledOutline else SlateOutline,
-        outlineVariant = Color.White.copy(alpha = if (amoledBlack) 0.09f else 0.08f),
+        outlineVariant = Color.White.copy(alpha = 0.08f),
         error = ErrorRed,
         onError = ObsidianBg,
         errorContainer = ErrorContainerDark,
@@ -80,7 +80,7 @@ fun CineVaultTheme(
 fun Modifier.machinedSurface(
     shape: Shape = RoundedCornerShape(18.dp),
     amoledBlack: Boolean = false,
-    borderAlpha: Float = if (amoledBlack) 0.09f else 0.08f,
+    borderAlpha: Float = 0.08f,
     topHighlightAlpha: Float = 0.07f,
     cornerRadiusDp: Dp = 18.dp
 ): Modifier = this

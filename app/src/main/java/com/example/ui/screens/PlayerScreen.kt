@@ -340,6 +340,33 @@ fun PlayerScreen(
     val mpvState by mpvController.state.collectAsStateWithLifecycle()
     val uiState = if (activeEngine == PlaybackEngine.EXOPLAYER) exoState else mpvState
 
+    // Automatic Codec Fallback: If ExoPlayer fails with decoder/codec unsupported error, switch to native libmpv seamlessly
+    var hasAttemptedCodecFallback by remember(activeStreamUrl) { mutableStateOf(false) }
+    LaunchedEffect(exoState.errorMessage, activeEngine, hasAttemptedCodecFallback) {
+        val err = exoState.errorMessage
+        if (!hasAttemptedCodecFallback && activeEngine == PlaybackEngine.EXOPLAYER && !err.isNullOrBlank()) {
+            val isCodecOrDecoderError = err.contains("decoder", ignoreCase = true) ||
+                err.contains("codec", ignoreCase = true) ||
+                err.contains("format", ignoreCase = true) ||
+                err.contains("extract", ignoreCase = true) ||
+                err.contains("audio", ignoreCase = true) ||
+                err.contains("unsupported", ignoreCase = true) ||
+                err.contains("ParserException", ignoreCase = true) ||
+                err.contains("MediaCodec", ignoreCase = true) ||
+                err.contains("BehindLiveWindowException", ignoreCase = true)
+
+            if (isCodecOrDecoderError) {
+                hasAttemptedCodecFallback = true
+                android.widget.Toast.makeText(
+                    context,
+                    "Switched to native libmpv engine for audio/video compatibility",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+                activeEngine = PlaybackEngine.LIBMPV
+            }
+        }
+    }
+
     // Resolve sources/subtitles dynamically if missing (e.g. launched from Vault or Up Next)
     LaunchedEffect(activeImdbId, activeMediaType) {
         if (activeSubtitles.isEmpty() && activeImdbId.isNotBlank()) {
@@ -1025,7 +1052,7 @@ fun PlayerScreen(
                     .windowInsetsPadding(WindowInsets.safeDrawing)
                     .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
-                // Top Bar: Back, Title, Up Next Jump, Lock, Engine Switcher
+                // Top Bar: Back (Top-Left Only), Lock, Screen Rotation, Engine Switcher
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1033,95 +1060,15 @@ fun PlayerScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
+                    IconButton(
+                        onClick = onClose,
+                        modifier = Modifier.testTag("player_back_button")
                     ) {
-                        IconButton(
-                            onClick = onClose,
-                            modifier = Modifier.testTag("player_back_button")
-                        ) {
-                            Icon(
-                                Icons.AutoMirrored.Rounded.ArrowBack,
-                                contentDescription = "Close player",
-                                tint = Color.White
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text(
-                                    text = activeTitle,
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = Color.White,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f, fill = false)
-                                )
-                                if (isSeries && seriesEpisodes.isNotEmpty()) {
-                                    val badgeSeason = activeSeason ?: seriesEpisodes.firstOrNull()?.season ?: 1
-                                    val badgeEpisode = activeEpisode ?: seriesEpisodes.firstOrNull()?.episode ?: 1
-                                    Surface(
-                                        color = Color.White.copy(alpha = 0.14f),
-                                        shape = RoundedCornerShape(10.dp),
-                                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.22f)),
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .clickable {
-                                                selectedDropdownSeason = badgeSeason
-                                                showEpisodeDropdown = !showEpisodeDropdown
-                                                lastInteractionMs = System.currentTimeMillis()
-                                            }
-                                            .testTag("player_episode_dropdown_badge")
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(2.dp)
-                                        ) {
-                                            Text(
-                                                text = "S${badgeSeason}:E${badgeEpisode}",
-                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                                color = Color.White
-                                            )
-                                            Icon(
-                                                imageVector = Icons.Rounded.KeyboardArrowDown,
-                                                contentDescription = "Select episode",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Text(
-                                    text = activeEngine.displayName,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                AnimatedVisibility(
-                                    visible = showGestureHint,
-                                    enter = fadeIn(),
-                                    exit = fadeOut()
-                                ) {
-                                    Text(
-                                        text = "• Swipe L/R: Bright/Vol • H-Swipe: Seek",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = Color.White.copy(alpha = 0.60f),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.testTag("player_gesture_hint")
-                                    )
-                                }
-                            }
-                        }
+                        Icon(
+                            Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = "Close player",
+                            tint = Color.White
+                        )
                     }
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1197,10 +1144,10 @@ fun PlayerScreen(
                     }
                 }
 
-                // Center Transport Controls (minimalist design matching Screenshot 2)
+                // Center Transport Controls (minimalist, borderless, spaced widely)
                 Row(
                     modifier = Modifier.align(Alignment.Center),
-                    horizontalArrangement = Arrangement.spacedBy(48.dp),
+                    horizontalArrangement = Arrangement.spacedBy(80.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(
@@ -1215,7 +1162,7 @@ fun PlayerScreen(
                             Icons.Rounded.Replay10,
                             contentDescription = "Rewind 10 seconds",
                             tint = Color.White,
-                            modifier = Modifier.size(38.dp)
+                            modifier = Modifier.size(44.dp)
                         )
                     }
 
@@ -1237,7 +1184,7 @@ fun PlayerScreen(
                                 imageVector = if (uiState.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                                 contentDescription = if (uiState.isPlaying) "Pause" else "Play",
                                 tint = Color.White,
-                                modifier = Modifier.size(46.dp)
+                                modifier = Modifier.size(60.dp)
                             )
                         }
                     }
@@ -1254,7 +1201,7 @@ fun PlayerScreen(
                             Icons.Rounded.Forward10,
                             contentDescription = "Forward 10 seconds",
                             tint = Color.White,
-                            modifier = Modifier.size(38.dp)
+                            modifier = Modifier.size(44.dp)
                         )
                     }
                 }
@@ -1282,26 +1229,53 @@ fun PlayerScreen(
                         verticalAlignment = Alignment.Bottom
                     ) {
                         // Bottom-Left Title, Subtitle, and Year Block
-                        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             val showTitle = activeTitle.substringBefore(" • ").ifBlank { activeTitle }
-                            val epSubtitle = if (activeSeason != null && activeEpisode != null) {
-                                "S$activeSeason E$activeEpisode • ${activeTitle.substringAfter(" • ", "Episode $activeEpisode")}"
-                            } else {
-                                activeTitle.substringAfter(" • ", "")
-                            }
                             Text(
                                 text = showTitle,
                                 style = MaterialTheme.typography.headlineMedium.copy(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 22.sp
                                 ),
-                                color = Color.White
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                            if (epSubtitle.isNotBlank()) {
+                            if (isSeries && seriesEpisodes.isNotEmpty()) {
+                                val sNum = activeSeason ?: 1
+                                val eNum = activeEpisode ?: 1
+                                val epName = activeTitle.substringAfter(" • ", "Episode $eNum")
+                                Surface(
+                                    color = Color.White.copy(alpha = 0.12f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            selectedDropdownSeason = sNum
+                                            showEpisodeDropdown = !showEpisodeDropdown
+                                            lastInteractionMs = System.currentTimeMillis()
+                                        }
+                                        .testTag("player_episode_dropdown_badge")
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text(
+                                            text = "S$sNum E$eNum • $epName ▾",
+                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                            color = Color.White,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            } else {
                                 Text(
-                                    text = epSubtitle,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = Color.White.copy(alpha = 0.85f)
+                                    text = activeEngine.displayName,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
                             Text(
@@ -1903,15 +1877,16 @@ private fun PlayerTimelineBar(
             val targetMs = (dragFraction * safeDuration).toLong()
             val deltaMs = targetMs - positionMs
             val sign = if (deltaMs >= 0L) "+" else "-"
-            val tooltipWidthPx = with(density) { 148.dp.roundToPx() }
+            val isCached = targetMs <= bufferedPositionMs
+            val tooltipWidthPx = with(density) { 156.dp.roundToPx() }
             val thumbCenterPx = (activeFraction * barWidthPx).roundToInt()
             val tooltipX = (thumbCenterPx - tooltipWidthPx / 2)
                 .coerceIn(0, (barWidthPx - tooltipWidthPx).coerceAtLeast(0))
-            val tooltipY = -with(density) { 36.dp.roundToPx() }
+            val tooltipY = -with(density) { 38.dp.roundToPx() }
             Surface(
-                color = Color.Black.copy(alpha = 0.88f),
+                color = Color.Black.copy(alpha = 0.92f),
                 shape = RoundedCornerShape(10.dp),
-                border = BorderStroke(1.dp, accentColor.copy(alpha = 0.65f)),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .offset { IntOffset(tooltipX, tooltipY) }
@@ -1919,7 +1894,7 @@ private fun PlayerTimelineBar(
                     .testTag("player_scrub_tooltip")
             ) {
                 Text(
-                    text = "${formatDuration(targetMs)} ($sign${formatDuration(abs(deltaMs))})",
+                    text = "${formatDuration(targetMs)} ($sign${formatDuration(abs(deltaMs))})${if (isCached) " • Cached" else ""}",
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = Color.White,
                     textAlign = TextAlign.Center,
@@ -1933,14 +1908,14 @@ private fun PlayerTimelineBar(
                 .fillMaxWidth()
                 .height(24.dp)
         ) {
-            val trackHeight = 5.dp.toPx()
+            val trackHeight = 6.dp.toPx()
             val centerY = size.height / 2f
             val topY = centerY - trackHeight / 2f
             val corner = CornerRadius(trackHeight / 2f, trackHeight / 2f)
 
-            // 1. Dark background track
+            // 1. Dark background pill track
             drawRoundRect(
-                color = Color.White.copy(alpha = 0.22f),
+                color = Color.White.copy(alpha = 0.20f),
                 topLeft = Offset(0f, topY),
                 size = Size(size.width, trackHeight),
                 cornerRadius = corner
@@ -1950,44 +1925,44 @@ private fun PlayerTimelineBar(
             val bufWidth = (size.width * bufferedFraction).coerceIn(0f, size.width)
             if (bufWidth > 0f) {
                 drawRoundRect(
-                    color = Color.White.copy(alpha = 0.45f),
+                    color = Color.White.copy(alpha = 0.35f),
                     topLeft = Offset(0f, topY),
                     size = Size(bufWidth, trackHeight),
                     cornerRadius = corner
                 )
             }
 
-            // 3. Active accent-colored playback progress bar
+            // 3. Active solid crisp white playback progress bar
             val progWidth = (size.width * activeFraction).coerceIn(0f, size.width)
             if (progWidth > 0f) {
                 drawRoundRect(
-                    color = accentColor,
+                    color = Color.White,
                     topLeft = Offset(0f, topY),
                     size = Size(progWidth, trackHeight),
                     cornerRadius = corner
                 )
             }
 
-            // 4. Draggable thumb (enlarged while scrubbing)
-            val thumbRadius = if (isDragging) 9.5.dp.toPx() else 7.dp.toPx()
-            val thumbX = progWidth.coerceIn(thumbRadius, (size.width - thumbRadius).coerceAtLeast(thumbRadius))
+            // 4. Draggable thumb (hidden by default, smoothly drawn only while scrubbing)
             if (isDragging) {
+                val thumbRadius = 9.dp.toPx()
+                val thumbX = progWidth.coerceIn(thumbRadius, (size.width - thumbRadius).coerceAtLeast(thumbRadius))
                 drawCircle(
-                    color = accentColor.copy(alpha = 0.28f),
-                    radius = thumbRadius * 1.65f,
+                    color = Color.White.copy(alpha = 0.25f),
+                    radius = thumbRadius * 1.6f,
+                    center = Offset(thumbX, centerY)
+                )
+                drawCircle(
+                    color = Color.White,
+                    radius = thumbRadius,
+                    center = Offset(thumbX, centerY)
+                )
+                drawCircle(
+                    color = accentColor,
+                    radius = thumbRadius * 0.5f,
                     center = Offset(thumbX, centerY)
                 )
             }
-            drawCircle(
-                color = Color.White,
-                radius = thumbRadius,
-                center = Offset(thumbX, centerY)
-            )
-            drawCircle(
-                color = accentColor,
-                radius = thumbRadius * 0.68f,
-                center = Offset(thumbX, centerY)
-            )
         }
     }
 }
@@ -2118,16 +2093,43 @@ private fun SubtitleStudioSheet(
             }
 
             if (isLibMpv) {
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text("Sync Offset: ${delayMs}ms", style = MaterialTheme.typography.labelLarge)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FilterChip(selected = false, onClick = { onChangeDelay(delayMs - 250) }, label = { Text("-250ms") })
-                        FilterChip(selected = delayMs == 0, onClick = { onChangeDelay(0) }, label = { Text("0ms") })
-                        FilterChip(selected = false, onClick = { onChangeDelay(delayMs + 250) }, label = { Text("+250ms") })
+                    Text(
+                        text = "Sync Offset: ${if (delayMs > 0) "+${delayMs}ms" else "${delayMs}ms"}",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        FilterChip(
+                            selected = false,
+                            onClick = { onChangeDelay(delayMs - 100) },
+                            label = { Text("-0.1s") }
+                        )
+                        FilterChip(
+                            selected = false,
+                            onClick = { onChangeDelay(delayMs + 100) },
+                            label = { Text("+0.1s") }
+                        )
+                        FilterChip(
+                            selected = false,
+                            onClick = { onChangeDelay(delayMs - 250) },
+                            label = { Text("-0.25s") }
+                        )
+                        FilterChip(
+                            selected = false,
+                            onClick = { onChangeDelay(delayMs + 250) },
+                            label = { Text("+0.25s") }
+                        )
+                        FilterChip(
+                            selected = delayMs == 0,
+                            onClick = { onChangeDelay(0) },
+                            label = { Text("0s") }
+                        )
                     }
                 }
             }
@@ -2148,19 +2150,47 @@ private fun SubtitleStudioSheet(
                     }
                 }
                 items(tracks) { track ->
+                    val formatBadge = when {
+                        track.label.contains("ass", ignoreCase = true) -> "ASS"
+                        track.label.contains("vtt", ignoreCase = true) -> "VTT"
+                        track.label.contains("srt", ignoreCase = true) -> "SRT"
+                        else -> null
+                    }
+                    val sourceBadge = when {
+                        track.label.contains("opensubtitle", ignoreCase = true) -> "OpenSubtitles"
+                        track.label.contains("embedded", ignoreCase = true) || track.label.contains("internal", ignoreCase = true) -> "Embedded"
+                        track.label.contains("external", ignoreCase = true) -> "External"
+                        else -> if (formatBadge != null) "Sub" else null
+                    }
+                    val tagText = listOfNotNull(sourceBadge, formatBadge).joinToString(" • ")
+
                     Surface(
-                        color = if (track.isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+                        color = if (track.isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f) else MaterialTheme.colorScheme.surfaceContainer,
                         shape = RoundedCornerShape(12.dp),
+                        border = if (track.isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onSelectTrack(track) }
                     ) {
                         Row(
-                            modifier = Modifier.padding(14.dp),
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(track.label, modifier = Modifier.weight(1f))
+                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    text = track.label,
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = if (track.isSelected) FontWeight.SemiBold else FontWeight.Normal),
+                                    color = if (track.isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                                )
+                                if (tagText.isNotBlank()) {
+                                    Text(
+                                        text = tagText,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                                    )
+                                }
+                            }
                             if (track.isSelected) {
                                 Icon(
                                     Icons.Rounded.CheckCircle,

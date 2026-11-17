@@ -3,6 +3,10 @@ package com.example.ui.screens
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -13,6 +17,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,31 +27,44 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudQueue
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.Downloading
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Sort
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Subtitles
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
+import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -65,8 +83,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.R
 import com.example.data.local.DownloadStatus
@@ -75,7 +95,9 @@ import com.example.data.local.MetadataMatchStatus
 import com.example.data.local.OfflineDownloadEntity
 import com.example.data.model.LibraryMediaItem
 import com.example.data.model.PlaybackEngine
+import com.example.data.model.StremioMetaPreview
 import com.example.player.PlaybackRequest
+import com.example.ui.theme.AmoledCard
 import com.example.ui.theme.machinedCardBorder
 import com.example.ui.viewmodel.UiState
 import java.io.File
@@ -94,6 +116,7 @@ fun LibraryScreen(
     onDeleteLocalMedia: (String) -> Unit,
     onDeleteDownload: (String) -> Unit,
     onPlayRequest: (PlaybackRequest) -> Unit,
+    onOpenPreview: ((StremioMetaPreview) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -116,51 +139,109 @@ fun LibraryScreen(
         pendingSubTargetUri = null
     }
 
-    Column(modifier = modifier.fillMaxSize()) {
+    val allLibItems = (libraryState as? UiState.Success)?.data.orEmpty()
+    val watchlistItems = remember(allLibItems) {
+        allLibItems.filter { it.streamUrl.isBlank() || it.isFavorite }
+    }
+    val cloudItems = remember(allLibItems) {
+        allLibItems.filter { it.streamUrl.isNotBlank() }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black)
+    ) {
+        // Safe Area Top Header
         Column(
             modifier = Modifier
                 .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(start = 16.dp, top = 24.dp, end = 16.dp, bottom = 10.dp)
+                .padding(start = 18.dp, top = 20.dp, end = 18.dp, bottom = 8.dp)
         ) {
             Text(
                 text = "Media Vault",
-                style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.onBackground
+                style = MaterialTheme.typography.headlineLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 26.sp
+                ),
+                color = Color.White
             )
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = "Cloud Library, Offline Downloads & Local Auto-Metadata",
+                text = "Watchlist, Cloud, Offline Downloads & Local Media",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = Color.White.copy(alpha = 0.60f)
             )
         }
 
-        TabRow(
+        // 4 Sub-Tabs with Counter Pills
+        val tabTitles = listOf(
+            "Watchlist" to watchlistItems.size,
+            "Cloud" to cloudItems.size,
+            "Offline" to downloads.size,
+            "Local" to localMedia.size
+        )
+
+        PrimaryScrollableTabRow(
             selectedTabIndex = selectedTab,
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = Color.Black,
+            contentColor = MaterialTheme.colorScheme.primary,
+            edgePadding = 16.dp,
+            divider = {},
+            indicator = { tabPositions ->
+                if (selectedTab < tabPositions.size) {
+                    TabRowDefaults.PrimaryIndicator(
+                        modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                        color = MaterialTheme.colorScheme.primary,
+                        height = 2.5.dp
+                    )
+                }
+            }
         ) {
-            Tab(
-                selected = selectedTab == 0,
-                onClick = { selectedTab = 0 },
-                text = { Text("Cloud Vault") },
-                modifier = Modifier.testTag("vault_tab_cloud")
-            )
-            Tab(
-                selected = selectedTab == 1,
-                onClick = { selectedTab = 1 },
-                text = { Text("Offline (${downloads.size})") },
-                modifier = Modifier.testTag("vault_tab_offline")
-            )
-            Tab(
-                selected = selectedTab == 2,
-                onClick = { selectedTab = 2 },
-                text = { Text("Local (${localMedia.size})") },
-                modifier = Modifier.testTag("vault_tab_local")
-            )
+            tabTitles.forEachIndexed { index, (label, count) ->
+                Tab(
+                    selected = selectedTab == index,
+                    onClick = { selectedTab = index },
+                    modifier = Modifier.testTag("vault_tab_$label"),
+                    text = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Medium
+                                ),
+                                color = if (selectedTab == index) Color.White else Color.White.copy(alpha = 0.55f)
+                            )
+                            Surface(
+                                color = if (selectedTab == index) MaterialTheme.colorScheme.primary.copy(alpha = 0.20f) else Color.White.copy(alpha = 0.08f),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text(
+                                    text = count.toString(),
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                    color = if (selectedTab == index) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.60f),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                )
+            }
         }
 
         when (selectedTab) {
-            0 -> CloudVaultTab(
-                libraryState = libraryState,
+            0 -> WatchlistTab(
+                items = watchlistItems,
+                preferredEngine = preferredEngine,
+                onRemoveItem = onRemoveLibraryItem,
+                onOpenPreview = onOpenPreview,
+                onPlayRequest = onPlayRequest
+            )
+            1 -> CloudVaultTab(
+                cloudItems = cloudItems,
                 downloads = downloads,
                 localMediaCount = localMedia.size,
                 preferredEngine = preferredEngine,
@@ -168,13 +249,13 @@ fun LibraryScreen(
                 onDeleteItem = onRemoveLibraryItem,
                 onPlayRequest = onPlayRequest
             )
-            1 -> OfflineDownloadsTab(
+            2 -> OfflineDownloadsTab(
                 downloads = downloads,
                 preferredEngine = preferredEngine,
                 onPlayRequest = onPlayRequest,
                 onDeleteDownload = onDeleteDownload
             )
-            2 -> LocalMediaTab(
+            3 -> LocalMediaTab(
                 localMedia = localMedia,
                 preferredEngine = preferredEngine,
                 onPickVideo = { videoPickerLauncher.launch(arrayOf("video/*")) },
@@ -200,9 +281,217 @@ fun LibraryScreen(
     }
 }
 
+// -------------------------------------------------------------
+// Sub-Tab 1: Watchlist (Grid with IMDb rating & Remove button)
+// -------------------------------------------------------------
+@Composable
+private fun WatchlistTab(
+    items: List<LibraryMediaItem>,
+    preferredEngine: PlaybackEngine,
+    onRemoveItem: (String) -> Unit,
+    onOpenPreview: ((StremioMetaPreview) -> Unit)?,
+    onPlayRequest: (PlaybackRequest) -> Unit
+) {
+    if (items.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = 112.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            EmptyVaultPlaceholder(
+                title = "Your Watchlist is Empty",
+                subtitle = "Tap the bookmark icon on any movie or series to save it for later."
+            )
+        }
+    } else {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 120.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            items(items, key = { it.mediaKey }) { item ->
+                WatchlistPosterCard(
+                    item = item,
+                    preferredEngine = preferredEngine,
+                    onRemove = { onRemoveItem(item.mediaKey) },
+                    onClick = {
+                        if (onOpenPreview != null) {
+                            onOpenPreview(
+                                StremioMetaPreview(
+                                    id = item.mediaKey,
+                                    type = item.mediaType,
+                                    name = item.title,
+                                    poster = item.posterUrl.ifBlank { null },
+                                    background = item.backdropUrl.ifBlank { null },
+                                    description = item.overview.ifBlank { null },
+                                    releaseInfo = item.year.ifBlank { null },
+                                    imdbRating = item.imdbRating.ifBlank { null }
+                                )
+                            )
+                        } else if (item.streamUrl.isNotBlank()) {
+                            onPlayRequest(
+                                PlaybackRequest(
+                                    mediaKey = item.mediaKey,
+                                    title = item.title,
+                                    mediaType = item.mediaType,
+                                    streamUrl = item.streamUrl,
+                                    posterUrl = item.posterUrl,
+                                    backdropUrl = item.backdropUrl,
+                                    initialPositionMs = item.watchProgressMs,
+                                    preferredEngine = preferredEngine.key
+                                )
+                            )
+                        }
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WatchlistPosterCard(
+    item: LibraryMediaItem,
+    preferredEngine: PlaybackEngine,
+    onRemove: () -> Unit,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .clip(RoundedCornerShape(12.dp))
+                .background(AmoledCard)
+                .machinedCardBorder(cornerRadiusDp = 12.dp)
+        ) {
+            if (item.posterUrl.isNotBlank()) {
+                AsyncImage(
+                    model = item.posterUrl,
+                    contentDescription = item.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.White.copy(alpha = 0.05f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Rounded.CloudQueue,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.35f),
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+            }
+
+            // Remove Button (Top-Left)
+            Surface(
+                color = Color.Black.copy(alpha = 0.70f),
+                shape = CircleShape,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(6.dp)
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .clickable { onRemove() }
+            ) {
+                Icon(
+                    Icons.Rounded.Close,
+                    contentDescription = "Remove from Watchlist",
+                    tint = Color.White,
+                    modifier = Modifier
+                        .padding(5.dp)
+                        .fillMaxSize()
+                )
+            }
+
+            // IMDb Rating Badge (Top-Right)
+            if (item.imdbRating.isNotBlank()) {
+                Surface(
+                    color = Color.Black.copy(alpha = 0.78f),
+                    shape = RoundedCornerShape(6.dp),
+                    border = BorderStroke(1.dp, Color(0xFFF5A623).copy(alpha = 0.40f)),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Icon(
+                            Icons.Rounded.Star,
+                            contentDescription = null,
+                            tint = Color(0xFFF5A623),
+                            modifier = Modifier.size(11.dp)
+                        )
+                        Text(
+                            text = item.imdbRating,
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = Color.White,
+                            fontSize = 10.sp
+                        )
+                    }
+                }
+            }
+
+            // Watch progress bar if partially watched
+            if (item.durationMs > 0L && item.watchProgressMs > 0L) {
+                val pct = (item.watchProgressMs.toFloat() / item.durationMs.toFloat()).coerceIn(0f, 1f)
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .background(Color.White.copy(alpha = 0.20f))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(pct)
+                            .height(3.dp)
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Text(
+            text = item.title,
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = listOfNotNull(item.year.takeIf { it.isNotBlank() }, item.mediaType.uppercase()).joinToString(" • "),
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White.copy(alpha = 0.50f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+// -------------------------------------------------------------
+// Sub-Tab 2: Cloud Vault (Personal Cloud Streams & Hub)
+// -------------------------------------------------------------
 @Composable
 private fun CloudVaultTab(
-    libraryState: UiState<List<LibraryMediaItem>>,
+    cloudItems: List<LibraryMediaItem>,
     downloads: List<OfflineDownloadEntity>,
     localMediaCount: Int,
     preferredEngine: PlaybackEngine,
@@ -210,22 +499,21 @@ private fun CloudVaultTab(
     onDeleteItem: (String) -> Unit,
     onPlayRequest: (PlaybackRequest) -> Unit
 ) {
-    val itemsList = (libraryState as? UiState.Success)?.data.orEmpty()
     val totalCachedBytes = remember(downloads) { downloads.sumOf { it.bytesDownloaded } }
 
     LazyColumn(
-        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 112.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 120.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier.fillMaxSize()
     ) {
         item {
-            val hubShape = RoundedCornerShape(20.dp)
+            val hubShape = RoundedCornerShape(18.dp)
             Card(
                 shape = hubShape,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                colors = CardDefaults.cardColors(containerColor = AmoledCard),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .machinedCardBorder(shape = hubShape, cornerRadiusDp = 20.dp)
+                    .machinedCardBorder(shape = hubShape, cornerRadiusDp = 18.dp)
                     .testTag("storage_cloud_hub_card")
             ) {
                 Box(
@@ -234,8 +522,8 @@ private fun CloudVaultTab(
                         .background(
                             Brush.linearGradient(
                                 colors = listOf(
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
-                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.08f),
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.06f),
                                     Color.Transparent
                                 )
                             )
@@ -252,12 +540,12 @@ private fun CloudVaultTab(
                                 Text(
                                     text = "Storage & Cloud Hub",
                                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = Color.White
                                 )
                                 Text(
-                                    text = "${itemsList.size} Cloud • ${downloads.size} Offline (${formatBytes(totalCachedBytes)}) • $localMediaCount Local",
+                                    text = "${cloudItems.size} Cloud • ${downloads.size} Offline (${formatBytes(totalCachedBytes)}) • $localMediaCount Local",
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = Color.White.copy(alpha = 0.60f)
                                 )
                             }
                             Spacer(modifier = Modifier.width(10.dp))
@@ -272,14 +560,13 @@ private fun CloudVaultTab(
                             }
                         }
 
-                        // Segmented Offline / Cached / Cloud Bar
-                        val cloudUnits = itemsList.size.coerceAtLeast(1).toFloat()
+                        val cloudUnits = cloudItems.size.coerceAtLeast(1).toFloat()
                         val offlineUnits = downloads.size.coerceAtLeast(1).toFloat()
                         val localUnits = localMediaCount.coerceAtLeast(1).toFloat()
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(8.dp)
+                                .height(6.dp)
                                 .clip(RoundedCornerShape(50))
                                 .background(Color.White.copy(alpha = 0.08f)),
                             horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -308,22 +595,22 @@ private fun CloudVaultTab(
             }
         }
 
-        if (itemsList.isEmpty()) {
+        if (cloudItems.isEmpty()) {
             item {
                 EmptyVaultPlaceholder(
-                    title = stringResource(R.string.empty_library_title),
-                    subtitle = stringResource(R.string.empty_library_subtitle)
+                    title = "No Cloud Streams Linked",
+                    subtitle = "Tap 'Link' above to connect WebDAV, Telegram channels, or personal cloud video streams."
                 )
             }
         } else {
-            items(itemsList, key = { it.mediaKey }) { item ->
-                val itemShape = RoundedCornerShape(16.dp)
+            items(cloudItems, key = { it.mediaKey }) { item ->
+                val itemShape = RoundedCornerShape(14.dp)
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                    colors = CardDefaults.cardColors(containerColor = AmoledCard),
                     shape = itemShape,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .machinedCardBorder(shape = itemShape, cornerRadiusDp = 16.dp)
+                        .machinedCardBorder(shape = itemShape, cornerRadiusDp = 14.dp)
                 ) {
                     Row(
                         modifier = Modifier.padding(12.dp),
@@ -331,9 +618,9 @@ private fun CloudVaultTab(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(width = 68.dp, height = 96.dp)
+                                .size(width = 64.dp, height = 90.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                                .background(Color.White.copy(alpha = 0.05f)),
                             contentAlignment = Alignment.Center
                         ) {
                             if (item.posterUrl.isNotBlank()) {
@@ -347,7 +634,7 @@ private fun CloudVaultTab(
                                 Icon(
                                     Icons.Rounded.CloudQueue,
                                     contentDescription = item.title,
-                                    tint = MaterialTheme.colorScheme.secondary
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
@@ -360,21 +647,24 @@ private fun CloudVaultTab(
                         ) {
                             Text(
                                 text = item.title,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = Color.White,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = "${item.sourceLabel} • ${item.mediaType.uppercase()}",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.secondary
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
                             )
                             if (item.durationMs > 0L && item.watchProgressMs > 0L) {
                                 val pct = (item.watchProgressMs.toFloat() / item.durationMs.toFloat()).coerceIn(0f, 1f)
                                 LinearProgressIndicator(
                                     progress = { pct },
-                                    modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp))
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(4.dp)
+                                        .clip(RoundedCornerShape(2.dp))
                                 )
                             }
                         }
@@ -399,7 +689,8 @@ private fun CloudVaultTab(
                                 Icon(
                                     Icons.Rounded.PlayArrow,
                                     contentDescription = "Play ${item.title}",
-                                    tint = MaterialTheme.colorScheme.primary
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(28.dp)
                                 )
                             }
                         }
@@ -417,6 +708,9 @@ private fun CloudVaultTab(
     }
 }
 
+// -------------------------------------------------------------
+// Sub-Tab 3: Offline Downloads (Active & Completed sections)
+// -------------------------------------------------------------
 @Composable
 private fun OfflineDownloadsTab(
     downloads: List<OfflineDownloadEntity>,
@@ -424,77 +718,198 @@ private fun OfflineDownloadsTab(
     onPlayRequest: (PlaybackRequest) -> Unit,
     onDeleteDownload: (String) -> Unit
 ) {
+    val activeDownloads = remember(downloads) {
+        downloads.filter { it.status != DownloadStatus.COMPLETED.name }
+    }
+    val completedDownloads = remember(downloads) {
+        downloads.filter { it.status == DownloadStatus.COMPLETED.name && it.localFilePath.isNotBlank() }
+    }
+
     LazyColumn(
-        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 112.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 120.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier.fillMaxSize()
     ) {
         if (downloads.isEmpty()) {
             item {
                 EmptyVaultPlaceholder(
                     title = "No Offline Downloads Yet",
-                    subtitle = "Tap the download icon on any stream in Discover to watch offline on the go."
+                    subtitle = "Tap the download button on any stream to watch completely offline without internet."
                 )
             }
         } else {
-            items(downloads, key = { it.downloadKey }) { dl ->
-                val isCompleted = dl.status == DownloadStatus.COMPLETED.name && dl.localFilePath.isNotBlank()
-                val dlShape = RoundedCornerShape(16.dp)
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                    shape = dlShape,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .machinedCardBorder(shape = dlShape, cornerRadiusDp = 16.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+            // Section 1: Active Downloads
+            if (activeDownloads.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "Active Downloads (${activeDownloads.size})",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White
+                    )
+                }
+                items(activeDownloads, key = { it.downloadKey }) { dl ->
+                    val dlShape = RoundedCornerShape(14.dp)
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = AmoledCard),
+                        shape = dlShape,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .machinedCardBorder(shape = dlShape, cornerRadiusDp = 14.dp)
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(52.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.05f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    progress = { dl.progressPercent / 100f },
+                                    modifier = Modifier.size(46.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = Color.White.copy(alpha = 0.10f),
+                                    strokeWidth = 3.dp
+                                )
+                                Text(
+                                    text = "${dl.progressPercent}%",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = Color.White
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(14.dp))
+
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = dl.title,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = "${dl.status} • ${dl.qualityLabel} • ${formatBytes(dl.bytesDownloaded)}",
+                                    text = "${dl.qualityLabel} • ${dl.status.lowercase().replaceFirstChar { it.uppercase() }}",
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.secondary
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                if (dl.totalBytes > 0L) {
+                                    Text(
+                                        text = "${formatBytes(dl.bytesDownloaded)} of ${formatBytes(dl.totalBytes)}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color.White.copy(alpha = 0.50f)
+                                    )
+                                }
+                            }
+
+                            IconButton(onClick = { onDeleteDownload(dl.downloadKey) }) {
+                                Icon(
+                                    Icons.Rounded.Close,
+                                    contentDescription = "Cancel download",
+                                    tint = Color.White.copy(alpha = 0.70f)
                                 )
                             }
+                        }
+                    }
+                }
+            }
+
+            // Section 2: Completed Downloads
+            if (completedDownloads.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "Downloaded (${completedDownloads.size})",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White
+                    )
+                }
+                items(completedDownloads, key = { it.downloadKey }) { dl ->
+                    val dlShape = RoundedCornerShape(14.dp)
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = AmoledCard),
+                        shape = dlShape,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .machinedCardBorder(shape = dlShape, cornerRadiusDp = 14.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(width = 56.dp, height = 80.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.White.copy(alpha = 0.05f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (dl.posterUrl.isNotBlank()) {
+                                    AsyncImage(
+                                        model = dl.posterUrl,
+                                        contentDescription = dl.title,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Icon(
+                                        Icons.Rounded.DownloadDone,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = dl.title,
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "${dl.qualityLabel} • ${formatBytes(dl.bytesDownloaded)}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = "Ready for offline playback",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White.copy(alpha = 0.50f)
+                                )
+                            }
+
                             Row {
-                                if (isCompleted) {
-                                    IconButton(
-                                        onClick = {
-                                            val fileUri = Uri.fromFile(File(dl.localFilePath)).toString()
-                                            val subUri = if (dl.localSubtitlePath.isNotBlank()) {
-                                                Uri.fromFile(File(dl.localSubtitlePath)).toString()
-                                            } else ""
-                                            onPlayRequest(
-                                                PlaybackRequest(
-                                                    mediaKey = dl.mediaKey,
-                                                    title = dl.title,
-                                                    mediaType = dl.mediaType,
-                                                    streamUrl = fileUri,
-                                                    posterUrl = dl.posterUrl,
-                                                    preferredEngine = preferredEngine.key,
-                                                    localSubtitleUri = subUri
-                                                )
+                                IconButton(
+                                    onClick = {
+                                        val fileUri = Uri.fromFile(File(dl.localFilePath)).toString()
+                                        val subUri = if (dl.localSubtitlePath.isNotBlank()) {
+                                            Uri.fromFile(File(dl.localSubtitlePath)).toString()
+                                        } else ""
+                                        onPlayRequest(
+                                            PlaybackRequest(
+                                                mediaKey = dl.mediaKey,
+                                                title = dl.title,
+                                                mediaType = dl.mediaType,
+                                                streamUrl = fileUri,
+                                                posterUrl = dl.posterUrl,
+                                                preferredEngine = preferredEngine.key,
+                                                localSubtitleUri = subUri
                                             )
-                                        }
-                                    ) {
-                                        Icon(
-                                            Icons.Rounded.DownloadDone,
-                                            contentDescription = "Play offline",
-                                            tint = MaterialTheme.colorScheme.primary
                                         )
                                     }
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.PlayArrow,
+                                        contentDescription = "Play offline",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(28.dp)
+                                    )
                                 }
                                 IconButton(onClick = { onDeleteDownload(dl.downloadKey) }) {
                                     Icon(
@@ -505,20 +920,6 @@ private fun OfflineDownloadsTab(
                                 }
                             }
                         }
-
-                        if (!isCompleted && dl.status != DownloadStatus.FAILED.name) {
-                            LinearProgressIndicator(
-                                progress = { dl.progressPercent / 100f },
-                                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp))
-                            )
-                        }
-                        if (dl.errorMessage.isNotBlank()) {
-                            Text(
-                                text = dl.errorMessage,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
                     }
                 }
             }
@@ -526,6 +927,9 @@ private fun OfflineDownloadsTab(
     }
 }
 
+// -------------------------------------------------------------
+// Sub-Tab 4: Local Media (Scanner, Metadata Matching, Filter/Sort)
+// -------------------------------------------------------------
 @Composable
 private fun LocalMediaTab(
     localMedia: List<LocalMediaEntity>,
@@ -536,15 +940,26 @@ private fun LocalMediaTab(
     onDeleteLocal: (String) -> Unit,
     onPlayRequest: (PlaybackRequest) -> Unit
 ) {
+    var sortOrder by remember { mutableStateOf("Newest Added") }
+    var showSortMenu by remember { mutableStateOf(false) }
+
+    val sortedMedia = remember(localMedia, sortOrder) {
+        when (sortOrder) {
+            "File Size (Large-Small)" -> localMedia.sortedByDescending { it.fileSizeBytes }
+            "Title (A-Z)" -> localMedia.sortedBy { it.parsedTitle.lowercase() }
+            else -> localMedia.sortedByDescending { it.addedAtMs }
+        }
+    }
+
     LazyColumn(
-        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 112.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 120.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier.fillMaxSize()
     ) {
         item {
             val localBannerShape = RoundedCornerShape(18.dp)
             Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                colors = CardDefaults.cardColors(containerColor = AmoledCard),
                 shape = localBannerShape,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -568,15 +983,15 @@ private fun LocalMediaTab(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "Local Media + Auto Metadata",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = Color.White
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Select any MKV/MP4 from your device. CineVault parses filename & resolution and retrieves IMDb posters & synopsis automatically.",
+                            text = "Import MKV/MP4 files. CineVault parses filenames and fetches high-res Cinemeta posters automatically.",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = Color.White.copy(alpha = 0.60f)
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
@@ -586,37 +1001,91 @@ private fun LocalMediaTab(
                         modifier = Modifier.testTag("import_local_video_button")
                     ) {
                         Icon(Icons.Rounded.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text("Import")
                     }
                 }
             }
         }
 
-        if (localMedia.isEmpty()) {
+        if (localMedia.isNotEmpty()) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Imported Videos (${localMedia.size})",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White
+                    )
+
+                    Box {
+                        Surface(
+                            color = Color.White.copy(alpha = 0.08f),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { showSortMenu = true }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(Icons.Rounded.Sort, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                Text(
+                                    text = sortOrder,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White
+                                )
+                            }
+                        }
+
+                        DropdownMenu(
+                            expanded = showSortMenu,
+                            onDismissRequest = { showSortMenu = false }
+                        ) {
+                            listOf("Newest Added", "File Size (Large-Small)", "Title (A-Z)").forEach { opt ->
+                                DropdownMenuItem(
+                                    text = { Text(opt) },
+                                    onClick = {
+                                        sortOrder = opt
+                                        showSortMenu = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (sortedMedia.isEmpty()) {
             item {
                 EmptyVaultPlaceholder(
                     title = "No Local Videos Imported",
-                    subtitle = "Tap Import to add local device videos with automatic poster & metadata matching."
+                    subtitle = "Tap 'Import' to add videos from your device storage with automatic IMDb poster and metadata matching."
                 )
             }
         } else {
-            items(localMedia, key = { it.uriString }) { media ->
-                val localShape = RoundedCornerShape(16.dp)
+            items(sortedMedia, key = { it.uriString }) { media ->
+                val localShape = RoundedCornerShape(14.dp)
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                    colors = CardDefaults.cardColors(containerColor = AmoledCard),
                     shape = localShape,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .machinedCardBorder(shape = localShape, cornerRadiusDp = 16.dp)
+                        .machinedCardBorder(shape = localShape, cornerRadiusDp = 14.dp)
                 ) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
-                                    .size(width = 70.dp, height = 100.dp)
+                                    .size(width = 68.dp, height = 96.dp)
                                     .clip(RoundedCornerShape(10.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                                    .background(Color.White.copy(alpha = 0.05f)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (media.posterUrl.isNotBlank()) {
@@ -638,13 +1107,13 @@ private fun LocalMediaTab(
                             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(
                                     text = media.parsedTitle,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                    color = Color.White
                                 )
                                 val metaLine = listOfNotNull(
                                     media.parsedYear.takeIf { it.isNotBlank() },
                                     media.resolution.takeIf { it.isNotBlank() },
-                                    media.imdbRating.takeIf { it.isNotBlank() }?.let { "IMDb $it" }
+                                    media.imdbRating.takeIf { it.isNotBlank() }?.let { "★ $it" }
                                 ).joinToString(" • ")
                                 if (metaLine.isNotBlank()) {
                                     Text(
@@ -655,12 +1124,12 @@ private fun LocalMediaTab(
                                 }
                                 Text(
                                     text = when (media.metadataStatus) {
-                                        MetadataMatchStatus.MATCHED.name -> "Metadata matched (${media.imdbId})"
+                                        MetadataMatchStatus.MATCHED.name -> "Metadata matched"
                                         MetadataMatchStatus.PENDING.name -> "Retrieving metadata..."
                                         else -> "Local file • ${media.qualityTags.ifBlank { media.mimeType }}"
                                     },
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = Color.White.copy(alpha = 0.50f)
                                 )
                             }
                         }
@@ -668,8 +1137,8 @@ private fun LocalMediaTab(
                         if (media.overview.isNotBlank()) {
                             Text(
                                 text = media.overview,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.65f),
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -677,7 +1146,8 @@ private fun LocalMediaTab(
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Button(
                                 onClick = {
@@ -711,7 +1181,7 @@ private fun LocalMediaTab(
                             }
 
                             IconButton(onClick = { onRefreshMetadata(media.uriString) }) {
-                                Icon(Icons.Rounded.Refresh, contentDescription = "Re-fetch metadata")
+                                Icon(Icons.Rounded.Refresh, contentDescription = "Re-fetch metadata", tint = Color.White)
                             }
 
                             IconButton(onClick = { onDeleteLocal(media.uriString) }) {
@@ -734,7 +1204,7 @@ private fun EmptyVaultPlaceholder(title: String, subtitle: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 24.dp, horizontal = 12.dp),
+            .padding(vertical = 32.dp, horizontal = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Image(
@@ -743,16 +1213,22 @@ private fun EmptyVaultPlaceholder(title: String, subtitle: String) {
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(170.dp)
+                .height(160.dp)
                 .clip(RoundedCornerShape(18.dp))
         )
-        Spacer(modifier = Modifier.height(14.dp))
-        Text(text = title, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            color = Color.White,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = subtitle,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = Color.White.copy(alpha = 0.55f),
+            textAlign = TextAlign.Center
         )
     }
 }
@@ -821,5 +1297,9 @@ private fun AddCloudMediaDialog(
 private fun formatBytes(bytes: Long): String {
     if (bytes <= 0L) return "0 MB"
     val mb = bytes / (1024.0 * 1024.0)
-    return String.format("%.1f MB", mb)
+    return if (mb >= 1024.0) {
+        String.format("%.2f GB", mb / 1024.0)
+    } else {
+        String.format("%.1f MB", mb)
+    }
 }

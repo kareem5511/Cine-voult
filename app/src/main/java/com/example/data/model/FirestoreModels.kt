@@ -62,6 +62,14 @@ data class UserPreferences(
     val autoPlayTrailers: String = "WIFI_ONLY", // OFF | WIFI_ONLY | ALWAYS
     val autoFetchLocalMetadata: Boolean = true,
     val downloadWifiOnly: Boolean = true,
+    val ambientBackdropGlow: Boolean = true,
+    val autoMatchBestStream: Boolean = false,
+    val autoSkipIntro: Boolean = true,
+    val autoPlayNextEpisode: Boolean = true,
+    val codecCompatibilityFallback: Boolean = true,
+    val defaultDownloadQuality: String = "1080p", // 1080p | 720p | ask
+    val simultaneousDownloadsLimit: Int = 2,
+    val embeddedSubtitlePriority: Boolean = false,
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 )

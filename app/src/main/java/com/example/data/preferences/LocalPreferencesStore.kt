@@ -31,6 +31,14 @@ class LocalPreferencesStore(private val context: Context) {
         val AUTO_PLAY_TRAILERS = stringPreferencesKey("auto_play_trailers")
         val AUTO_LOCAL_META = booleanPreferencesKey("auto_fetch_local_metadata")
         val WIFI_ONLY = booleanPreferencesKey("download_wifi_only")
+        val AMBIENT_GLOW = booleanPreferencesKey("ambient_backdrop_glow")
+        val AUTO_MATCH_STREAM = booleanPreferencesKey("auto_match_best_stream")
+        val AUTO_SKIP_INTRO = booleanPreferencesKey("auto_skip_intro")
+        val AUTO_PLAY_NEXT = booleanPreferencesKey("auto_play_next_episode")
+        val CODEC_FALLBACK = booleanPreferencesKey("codec_compatibility_fallback")
+        val DL_QUALITY = stringPreferencesKey("default_download_quality")
+        val SIMULTANEOUS_DL = intPreferencesKey("simultaneous_downloads_limit")
+        val EMBEDDED_SUB_PRIORITY = booleanPreferencesKey("embedded_subtitle_priority")
         val GUEST_SKIPPED = booleanPreferencesKey("guest_mode_skipped")
         val HIDDEN_CATALOGS = stringSetPreferencesKey("hidden_catalog_keys")
         val CATALOG_ORDER = stringPreferencesKey("catalog_order_csv")
@@ -86,7 +94,15 @@ class LocalPreferencesStore(private val context: Context) {
             amoledBlack = prefs[Keys.AMOLED_BLACK] ?: false,
             autoPlayTrailers = prefs[Keys.AUTO_PLAY_TRAILERS] ?: "WIFI_ONLY",
             autoFetchLocalMetadata = prefs[Keys.AUTO_LOCAL_META] ?: true,
-            downloadWifiOnly = prefs[Keys.WIFI_ONLY] ?: true
+            downloadWifiOnly = prefs[Keys.WIFI_ONLY] ?: true,
+            ambientBackdropGlow = prefs[Keys.AMBIENT_GLOW] ?: true,
+            autoMatchBestStream = prefs[Keys.AUTO_MATCH_STREAM] ?: false,
+            autoSkipIntro = prefs[Keys.AUTO_SKIP_INTRO] ?: true,
+            autoPlayNextEpisode = prefs[Keys.AUTO_PLAY_NEXT] ?: true,
+            codecCompatibilityFallback = prefs[Keys.CODEC_FALLBACK] ?: true,
+            defaultDownloadQuality = prefs[Keys.DL_QUALITY] ?: "1080p",
+            simultaneousDownloadsLimit = prefs[Keys.SIMULTANEOUS_DL] ?: 2,
+            embeddedSubtitlePriority = prefs[Keys.EMBEDDED_SUB_PRIORITY] ?: false
         )
     }
 
@@ -106,6 +122,14 @@ class LocalPreferencesStore(private val context: Context) {
             mutable[Keys.AUTO_PLAY_TRAILERS] = prefs.autoPlayTrailers
             mutable[Keys.AUTO_LOCAL_META] = prefs.autoFetchLocalMetadata
             mutable[Keys.WIFI_ONLY] = prefs.downloadWifiOnly
+            mutable[Keys.AMBIENT_GLOW] = prefs.ambientBackdropGlow
+            mutable[Keys.AUTO_MATCH_STREAM] = prefs.autoMatchBestStream
+            mutable[Keys.AUTO_SKIP_INTRO] = prefs.autoSkipIntro
+            mutable[Keys.AUTO_PLAY_NEXT] = prefs.autoPlayNextEpisode
+            mutable[Keys.CODEC_FALLBACK] = prefs.codecCompatibilityFallback
+            mutable[Keys.DL_QUALITY] = prefs.defaultDownloadQuality
+            mutable[Keys.SIMULTANEOUS_DL] = prefs.simultaneousDownloadsLimit
+            mutable[Keys.EMBEDDED_SUB_PRIORITY] = prefs.embeddedSubtitlePriority
         }
     }
 
@@ -123,7 +147,7 @@ class LocalPreferencesStore(private val context: Context) {
             mutable[Keys.COMPACT_GRID] = remote.compactGrid
             mutable[Keys.AUTO_LOCAL_META] = remote.autoFetchLocalMetadata
             mutable[Keys.WIFI_ONLY] = remote.downloadWifiOnly
-            // amoledBlack and autoPlayTrailers are kept as-is since Firestore does not store them
+            // local-only flags preserved
         }
     }
 }

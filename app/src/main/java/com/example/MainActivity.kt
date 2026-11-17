@@ -555,6 +555,10 @@ private fun CineVaultShell(
                                                 localSubtitleUri = req.localSubtitleUri
                                             )
                                         )
+                                    },
+                                    onOpenPreview = { preview ->
+                                        viewModel.loadMediaDetails(preview.type, preview.id)
+                                        navController.navigate(DetailRoute)
                                     }
                                 )
                             }
@@ -563,9 +567,11 @@ private fun CineVaultShell(
                                 AddonsScreen(
                                     addonsState = addonsState,
                                     addonCatalogNames = addonCatalogNames,
+                                    hiddenCatalogKeys = discoverState.hiddenSectionKeys,
                                     onInstallAddon = viewModel::installAddon,
                                     onToggleAddon = viewModel::toggleAddon,
-                                    onRemoveAddon = viewModel::removeAddon
+                                    onRemoveAddon = viewModel::removeAddon,
+                                    onToggleCatalogHidden = viewModel::toggleCatalogVisibility
                                 )
                             }
 
@@ -607,7 +613,15 @@ private fun CineVaultShell(
                                     onToggleFavorite = viewModel::toggleFavorite,
                                     onSelectEpisode = viewModel::selectEpisode,
                                     onPlayStream = launchStreamPlayer,
-                                    onDownloadStream = enqueueStreamDownload
+                                    onDownloadStream = enqueueStreamDownload,
+                                    downloads = downloads,
+                                    onNavigateToOffline = {
+                                        navController.navigate(LibraryRoute) {
+                                            popUpTo<DiscoverRoute> { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    }
                                 )
                             }
 
@@ -784,7 +798,16 @@ private fun CineVaultShell(
                         onSelectEpisode = viewModel::selectEpisode,
                         onPlayStream = launchStreamPlayer,
                         onDownloadStream = enqueueStreamDownload,
-                        isModal = true
+                        isModal = true,
+                        downloads = downloads,
+                        onNavigateToOffline = {
+                            showTitleDetailModal = false
+                            navController.navigate(LibraryRoute) {
+                                popUpTo<DiscoverRoute> { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
                     )
                 }
             }
@@ -805,6 +828,27 @@ private fun FloatingBottomDock(
     val dockColor = Color(0xFF0A0A0A).copy(alpha = 0.95f)
     val borderAlpha = 0.10f
     val accentPrimary = MaterialTheme.colorScheme.primary
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
+    val infinitePulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "vault_pulse")
+    val pulseAlpha by infinitePulse.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(750, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        ),
+        label = "pulse_alpha"
+    )
+    val pulseScale by infinitePulse.animateFloat(
+        initialValue = 0.85f,
+        targetValue = 1.15f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(750, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        ),
+        label = "pulse_scale"
+    )
 
     Surface(
         shape = dockShape,
@@ -827,15 +871,33 @@ private fun FloatingBottomDock(
             items.forEach { item ->
                 val selected = isSelected(item)
                 val pillShape = RoundedCornerShape(24.dp)
+                val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                val isPressed by interactionSource.collectIsPressedAsState()
+                val scale by androidx.compose.animation.core.animateFloatAsState(
+                    targetValue = if (isPressed) 0.96f else 1f,
+                    animationSpec = androidx.compose.animation.core.tween(150),
+                    label = "tab_scale"
+                )
+
                 Box(
                     modifier = Modifier
                         .weight(1f)
+                        .androidx.compose.ui.graphics.graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                        }
                         .clip(pillShape)
                         .background(
                             if (selected) Color.White.copy(alpha = 0.14f) else Color.Transparent,
                             shape = pillShape
                         )
-                        .clickable { onNavigate(item) }
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = null
+                        ) {
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                            onNavigate(item)
+                        }
                         .padding(vertical = 6.dp)
                         .testTag(item.testTag),
                     contentAlignment = Alignment.Center
@@ -855,7 +917,12 @@ private fun FloatingBottomDock(
                                 Box(
                                     modifier = Modifier
                                         .align(Alignment.TopEnd)
-                                        .size(7.dp)
+                                        .size(8.dp)
+                                        .androidx.compose.ui.graphics.graphicsLayer {
+                                            scaleX = pulseScale
+                                            scaleY = pulseScale
+                                            alpha = pulseAlpha
+                                        }
                                         .clip(CircleShape)
                                         .background(accentPrimary)
                                 )
