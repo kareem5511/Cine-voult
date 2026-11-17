@@ -27,29 +27,32 @@ jobs:
         with:
           gradle-version: 9.3.1
 
-      - name: Prepare Environment
+      - name: Prepare Environment & Keystore
         run: |
           if [ -f .env.example ] && [ ! -f .env ]; then
             cp .env.example .env
           fi
+          if [ ! -f debug.keystore ]; then
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
 
       - name: Build Debug APK
         run: |
-          gradle clean :app:assembleDebug --stacktrace --no-build-cache -Djava.awt.headless=true 2>&1 | tee gradle-build.log
+          gradle :app:assembleDebug --stacktrace -Djava.awt.headless=true 2>&1 | tee gradle-build.log
 
       - name: Inspect Build Outputs
         if: always()
         run: |
-          echo "## 📋 Gradle Build Log" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          tail -n 200 gradle-build.log >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
           echo "=== Searching for APK files ==="
           find . -name "*.apk" | tee apk_files.txt
-          echo "### Discovered APK files:" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          cat apk_files.txt >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          python3 -c '
+          import os
+          if os.path.exists("apk_files.txt"):
+              with open("apk_files.txt") as f:
+                  for line in f.read().splitlines():
+                      if line.strip():
+                          print(f"::notice title=DiscoveredAPK::{line.strip()}")
+          '
 
       - name: Upload Build Log
         if: always()
@@ -65,7 +68,7 @@ jobs:
         with:
           name: CineVault-Debug-APK
           path: |
+            app/build/outputs/apk/debug/*.apk
             app/build/outputs/apk/**/*.apk
-            **/build/outputs/**/*.apk
             **/*.apk
           retention-days: 14

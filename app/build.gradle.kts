@@ -32,6 +32,23 @@ android {
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
+  val debugKeystoreFile = file("${rootDir}/debug.keystore")
+  if (!debugKeystoreFile.exists()) {
+    try {
+      ProcessBuilder(
+        "keytool", "-genkey", "-v",
+        "-keystore", debugKeystoreFile.absolutePath,
+        "-storepass", "android",
+        "-alias", "androiddebugkey",
+        "-keypass", "android",
+        "-keyalg", "RSA",
+        "-keysize", "2048",
+        "-validity", "10000",
+        "-dname", "CN=Android Debug,O=Android,C=US"
+      ).start().waitFor()
+    } catch (_: Exception) {}
+  }
+
   // Do not remove or modify these signingConfigs. They are necessary for building, installing,
   // and updating Android apps in AI Studio.
   signingConfigs {
@@ -43,7 +60,7 @@ android {
       keyPassword = System.getenv("KEY_PASSWORD")
     }
     create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
+      storeFile = debugKeystoreFile
       storePassword = "android"
       keyAlias = "androiddebugkey"
       keyPassword = "android"
@@ -67,8 +84,7 @@ android {
         isShrinkResources = true
         proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       }
-      // Use custom debugConfig if debug.keystore exists, otherwise fallback to default AGP debug signing
-      if (file("${rootDir}/debug.keystore").exists()) {
+      if (debugKeystoreFile.exists()) {
         signingConfig = signingConfigs.getByName("debugConfig")
       }
     }
