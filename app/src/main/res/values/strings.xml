@@ -1,0 +1,25 @@
+<resources>
+    <string name="app_name">CineVault</string>
+    <string name="tagline">Cinema without limits, synced everywhere</string>
+    <string name="sign_in_google">Sign in with Google</string>
+    <string name="skip_sign_in">Skip for now (Use Locally)</string>
+    <string name="sign_in_sync">Sign in with Google to Sync</string>
+    <string name="sign_out">Sign out</string>
+    <string name="nav_discover">Discover</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_fleeks">Fleeks</string>
+    <string name="nav_continue">Continue</string>
+    <string name="nav_watchlist">Watchlist</string>
+    <string name="nav_library">Vault</string>
+    <string name="nav_addons">Addons</string>
+    <string name="nav_settings">Settings</string>
+    <string name="action_play_exoplayer">Play (ExoPlayer)</string>
+    <string name="action_play_libmpv">Play (libmpv)</string>
+    <string name="action_download_offline">Download Offline</string>
+    <string name="action_add_local_media">Import Local Video</string>
+    <string name="action_add_cloud_source">Add Cloud Media</string>
+    <string name="action_install_addon">Install Stremio Addon</string>
+    <string name="empty_library_title">Your Vault is Waiting</string>
+    <string name="empty_library_subtitle">Pin titles from Discover, import local videos for auto-metadata, or link cloud media URLs.</string>
+    <string name="error_generic">Something went wrong. Please try again.</string>
+</resources>

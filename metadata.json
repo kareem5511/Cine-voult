@@ -1,0 +1,6 @@
+{
+  "name": "CineVault",
+  "description": "Modular media streaming app supporting Stremio addons, ExoPlayer & libmpv playback, offline downloads, multi-device cloud sync, cloud storage libraries, and local media metadata retrieval.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

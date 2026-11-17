@@ -1,0 +1,154 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: default deny everything
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidStringList(val, maxSize) {
+      return val is list && val.size() <= maxSize && (val.size() == 0 || (val[0] is string && val[0].size() <= 64));
+    }
+
+    function isValidAddon(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.addonKey is string && data.addonKey.size() >= 1 && data.addonKey.size() <= 128 &&
+             data.manifestUrl is string && data.manifestUrl.size() >= 8 && data.manifestUrl.size() <= 500 &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+             (!('version' in data) || (data.version is string && data.version.size() <= 40)) &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 1000)) &&
+             (!('types' in data) || isValidStringList(data.types, 12)) &&
+             (!('resources' in data) || isValidStringList(data.resources, 15)) &&
+             data.enabled is bool;
+    }
+
+    function isValidLibraryItem(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.mediaKey is string && data.mediaKey.size() >= 1 && data.mediaKey.size() <= 128 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+             data.mediaType in ['movie', 'series', 'cloud_video', 'local_video'] &&
+             (!('posterUrl' in data) || (data.posterUrl is string && data.posterUrl.size() <= 600)) &&
+             (!('backdropUrl' in data) || (data.backdropUrl is string && data.backdropUrl.size() <= 600)) &&
+             (!('overview' in data) || (data.overview is string && data.overview.size() <= 2000)) &&
+             (!('year' in data) || (data.year is string && data.year.size() <= 16)) &&
+             (!('imdbRating' in data) || (data.imdbRating is string && data.imdbRating.size() <= 16)) &&
+             (!('streamUrl' in data) || (data.streamUrl is string && data.streamUrl.size() <= 1000)) &&
+             (!('sourceLabel' in data) || (data.sourceLabel is string && data.sourceLabel.size() <= 120)) &&
+             data.isFavorite is bool &&
+             data.watchProgressMs is int && data.watchProgressMs >= 0 &&
+             data.durationMs is int && data.durationMs >= 0 &&
+             (!('lastWatchedAtMs' in data) || (data.lastWatchedAtMs is int && data.lastWatchedAtMs >= 0));
+    }
+
+    function isValidPreferences(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.preferredEngine in ['EXOPLAYER', 'LIBMPV'] &&
+             data.hardwareDecoding is bool &&
+             data.subtitleFontSizeSp is int && data.subtitleFontSizeSp >= 12 && data.subtitleFontSizeSp <= 42 &&
+             data.subtitleColorHex is string && data.subtitleColorHex.size() >= 4 && data.subtitleColorHex.size() <= 16 &&
+             (data.subtitleBgOpacity is float || data.subtitleBgOpacity is int) && data.subtitleBgOpacity >= 0.0 && data.subtitleBgOpacity <= 1.0 &&
+             data.subtitleDelayMs is int && data.subtitleDelayMs >= -10000 && data.subtitleDelayMs <= 10000 &&
+             data.preferredSubtitleLang is string && data.preferredSubtitleLang.size() >= 2 && data.preferredSubtitleLang.size() <= 16 &&
+             (!('preferredAudioLang' in data) || (data.preferredAudioLang is string && data.preferredAudioLang.size() >= 2 && data.preferredAudioLang.size() <= 16)) &&
+             data.accentPreset in ['TUNGSTEN_GOLD', 'CINEMA_CYAN', 'CRIMSON_VELVET', 'EMERALD_NOIR'] &&
+             data.compactGrid is bool &&
+             data.autoFetchLocalMetadata is bool &&
+             data.downloadWifiOnly is bool;
+    }
+
+    match /users/{userId} {
+
+      match /addons/{addonId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(addonId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(addonId) &&
+                         incoming().keys().hasAll(['userId', 'addonKey', 'manifestUrl', 'name', 'enabled', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'addonKey', 'manifestUrl', 'name', 'version', 'description', 'types', 'resources', 'enabled', 'createdAt', 'updatedAt']) &&
+                         incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                         incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                         isValidAddon(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(addonId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().addonKey == existing().addonKey &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                         isValidAddon(incoming(), userId) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['manifestUrl', 'name', 'version', 'description', 'types', 'resources', 'enabled', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(addonId);
+      }
+
+      match /library/{mediaId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(mediaId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(mediaId) &&
+                         incoming().keys().hasAll(['userId', 'mediaKey', 'title', 'mediaType', 'isFavorite', 'watchProgressMs', 'durationMs', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'mediaKey', 'title', 'mediaType', 'posterUrl', 'backdropUrl', 'overview', 'year', 'imdbRating', 'streamUrl', 'sourceLabel', 'isFavorite', 'watchProgressMs', 'durationMs', 'lastWatchedAtMs', 'createdAt', 'updatedAt']) &&
+                         incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                         incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                         isValidLibraryItem(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(mediaId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().mediaKey == existing().mediaKey &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                         isValidLibraryItem(incoming(), userId) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'mediaType', 'posterUrl', 'backdropUrl', 'overview', 'year', 'imdbRating', 'streamUrl', 'sourceLabel', 'isFavorite', 'watchProgressMs', 'durationMs', 'lastWatchedAtMs', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(mediaId);
+      }
+
+      match /preferences/{prefId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(prefId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(prefId) &&
+                         incoming().keys().hasAll(['userId', 'preferredEngine', 'hardwareDecoding', 'subtitleFontSizeSp', 'subtitleColorHex', 'subtitleBgOpacity', 'subtitleDelayMs', 'preferredSubtitleLang', 'accentPreset', 'compactGrid', 'autoFetchLocalMetadata', 'downloadWifiOnly', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'preferredEngine', 'hardwareDecoding', 'subtitleFontSizeSp', 'subtitleColorHex', 'subtitleBgOpacity', 'subtitleDelayMs', 'preferredSubtitleLang', 'preferredAudioLang', 'accentPreset', 'compactGrid', 'autoFetchLocalMetadata', 'downloadWifiOnly', 'createdAt', 'updatedAt']) &&
+                         incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                         incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                         isValidPreferences(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(prefId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                         isValidPreferences(incoming(), userId) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['preferredEngine', 'hardwareDecoding', 'subtitleFontSizeSp', 'subtitleColorHex', 'subtitleBgOpacity', 'subtitleDelayMs', 'preferredSubtitleLang', 'preferredAudioLang', 'accentPreset', 'compactGrid', 'autoFetchLocalMetadata', 'downloadWifiOnly', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(prefId);
+      }
+    }
+  }
+}

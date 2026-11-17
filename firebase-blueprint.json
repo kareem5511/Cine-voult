@@ -1,0 +1,85 @@
+{
+  "entities": {
+    "StremioAddon": {
+      "title": "StremioAddon",
+      "description": "A Stremio-compatible addon manifest installed by a user and synced across devices.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID" },
+        "addonKey": { "type": "string", "description": "Stable addon identifier" },
+        "manifestUrl": { "type": "string", "description": "HTTPS URL to manifest.json" },
+        "name": { "type": "string", "description": "Addon display name" },
+        "version": { "type": "string", "description": "Addon semantic version" },
+        "description": { "type": "string", "description": "Addon summary description" },
+        "types": { "type": "array", "description": "Supported media types (movie, series, etc.)" },
+        "resources": { "type": "array", "description": "Supported Stremio resources (catalog, meta, stream, subtitles)" },
+        "enabled": { "type": "boolean", "description": "Whether the addon is active for queries" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server update timestamp" }
+      },
+      "required": ["userId", "addonKey", "manifestUrl", "name", "enabled", "createdAt", "updatedAt"]
+    },
+    "LibraryMediaItem": {
+      "title": "LibraryMediaItem",
+      "description": "A user's saved movie, series, or personal cloud media library item with synced watch progress.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID" },
+        "mediaKey": { "type": "string", "description": "Unique media identifier (e.g. tt1234567 or cloud item key)" },
+        "title": { "type": "string", "description": "Display title" },
+        "mediaType": { "type": "string", "enum": ["movie", "series", "cloud_video", "local_video"], "description": "Media item category" },
+        "posterUrl": { "type": "string", "description": "Poster artwork URL" },
+        "backdropUrl": { "type": "string", "description": "Backdrop artwork URL" },
+        "overview": { "type": "string", "description": "Synopsis or media description" },
+        "year": { "type": "string", "description": "Release year" },
+        "imdbRating": { "type": "string", "description": "Rating string" },
+        "streamUrl": { "type": "string", "description": "Optional direct cloud or stream URL" },
+        "sourceLabel": { "type": "string", "description": "Source provider label (e.g. Cinemeta, WebDAV, Cloud Drive)" },
+        "isFavorite": { "type": "boolean", "description": "Whether item is pinned to library" },
+        "watchProgressMs": { "type": "integer", "description": "Synced playback position in milliseconds" },
+        "durationMs": { "type": "integer", "description": "Total duration in milliseconds" },
+        "lastWatchedAtMs": { "type": "integer", "description": "Last playback timestamp in epoch millis" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server update timestamp" }
+      },
+      "required": ["userId", "mediaKey", "title", "mediaType", "isFavorite", "watchProgressMs", "durationMs", "createdAt", "updatedAt"]
+    },
+    "UserPreferences": {
+      "title": "UserPreferences",
+      "description": "Synced interface, player engine, and subtitle customization settings for a user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID" },
+        "preferredEngine": { "type": "string", "enum": ["EXOPLAYER", "LIBMPV"], "description": "Default playback engine" },
+        "hardwareDecoding": { "type": "boolean", "description": "Enable hardware media decoding" },
+        "subtitleFontSizeSp": { "type": "integer", "description": "Subtitle font size in sp" },
+        "subtitleColorHex": { "type": "string", "description": "Subtitle foreground hex color" },
+        "subtitleBgOpacity": { "type": "number", "description": "Subtitle backdrop opacity 0..1" },
+        "subtitleDelayMs": { "type": "integer", "description": "Default subtitle delay offset in ms" },
+        "preferredSubtitleLang": { "type": "string", "description": "ISO language code for auto subtitles" },
+        "preferredAudioLang": { "type": "string", "description": "ISO language code for preferred audio track" },
+        "accentPreset": { "type": "string", "enum": ["TUNGSTEN_GOLD", "CINEMA_CYAN", "CRIMSON_VELVET", "EMERALD_NOIR"], "description": "UI accent palette preset" },
+        "compactGrid": { "type": "boolean", "description": "Dense grid card layout preference" },
+        "autoFetchLocalMetadata": { "type": "boolean", "description": "Auto retrieve metadata for local files" },
+        "downloadWifiOnly": { "type": "boolean", "description": "Restrict offline downloads to Wi-Fi" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server update timestamp" }
+      },
+      "required": ["userId", "preferredEngine", "hardwareDecoding", "subtitleFontSizeSp", "subtitleColorHex", "subtitleBgOpacity", "subtitleDelayMs", "preferredSubtitleLang", "accentPreset", "compactGrid", "autoFetchLocalMetadata", "downloadWifiOnly", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/addons/{addonId}": {
+      "schema": { "$ref": "#/entities/StremioAddon" },
+      "description": "User's installed Stremio addons synced across devices"
+    },
+    "/users/{userId}/library/{mediaId}": {
+      "schema": { "$ref": "#/entities/LibraryMediaItem" },
+      "description": "User's cloud-synced media library, personal cloud streams, and watch progress"
+    },
+    "/users/{userId}/preferences/{prefId}": {
+      "schema": { "$ref": "#/entities/UserPreferences" },
+      "description": "User's synced player, subtitle, and UI customization settings"
+    }
+  }
+}
