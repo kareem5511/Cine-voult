@@ -7,11 +7,22 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -557,8 +568,8 @@ private fun CineVaultShell(
                                         )
                                     },
                                     onOpenPreview = { preview ->
-                                        viewModel.loadMediaDetails(preview.type, preview.id)
-                                        navController.navigate(DetailRoute)
+                                        viewModel.loadMediaDetail(preview)
+                                        showTitleDetailModal = true
                                     }
                                 )
                             }
@@ -828,24 +839,24 @@ private fun FloatingBottomDock(
     val dockColor = Color(0xFF0A0A0A).copy(alpha = 0.95f)
     val borderAlpha = 0.10f
     val accentPrimary = MaterialTheme.colorScheme.primary
-    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val haptic = LocalHapticFeedback.current
 
-    val infinitePulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "vault_pulse")
+    val infinitePulse = rememberInfiniteTransition(label = "vault_pulse")
     val pulseAlpha by infinitePulse.animateFloat(
         initialValue = 0.35f,
         targetValue = 1f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = androidx.compose.animation.core.tween(750, easing = androidx.compose.animation.core.FastOutSlowInEasing),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        animationSpec = infiniteRepeatable(
+            animation = tween<Float>(750, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
         ),
         label = "pulse_alpha"
     )
     val pulseScale by infinitePulse.animateFloat(
         initialValue = 0.85f,
         targetValue = 1.15f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = androidx.compose.animation.core.tween(750, easing = androidx.compose.animation.core.FastOutSlowInEasing),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        animationSpec = infiniteRepeatable(
+            animation = tween<Float>(750, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
         ),
         label = "pulse_scale"
     )
@@ -871,18 +882,18 @@ private fun FloatingBottomDock(
             items.forEach { item ->
                 val selected = isSelected(item)
                 val pillShape = RoundedCornerShape(24.dp)
-                val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                val interactionSource = remember { MutableInteractionSource() }
                 val isPressed by interactionSource.collectIsPressedAsState()
-                val scale by androidx.compose.animation.core.animateFloatAsState(
+                val scale by animateFloatAsState(
                     targetValue = if (isPressed) 0.96f else 1f,
-                    animationSpec = androidx.compose.animation.core.tween(150),
+                    animationSpec = tween(150),
                     label = "tab_scale"
                 )
 
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .androidx.compose.ui.graphics.graphicsLayer {
+                        .graphicsLayer {
                             scaleX = scale
                             scaleY = scale
                         }
@@ -895,7 +906,7 @@ private fun FloatingBottomDock(
                             interactionSource = interactionSource,
                             indication = null
                         ) {
-                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             onNavigate(item)
                         }
                         .padding(vertical = 6.dp)
@@ -918,7 +929,7 @@ private fun FloatingBottomDock(
                                     modifier = Modifier
                                         .align(Alignment.TopEnd)
                                         .size(8.dp)
-                                        .androidx.compose.ui.graphics.graphicsLayer {
+                                        .graphicsLayer {
                                             scaleX = pulseScale
                                             scaleY = pulseScale
                                             alpha = pulseAlpha
