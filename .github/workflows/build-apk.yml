@@ -40,6 +40,8 @@ jobs:
       - name: Build Debug APK
         run: |
           gradle :app:assembleDebug --stacktrace --no-configuration-cache --no-build-cache -Djava.awt.headless=true 2>&1 | tee gradle-build.log
+          GRADLE_EXIT=${PIPESTATUS[0]}
+          echo "GRADLE_EXIT=$GRADLE_EXIT" >> $GITHUB_ENV
 
       - name: Inspect Build Outputs
         if: always()
@@ -47,7 +49,7 @@ jobs:
           echo "=== Searching for APK files ==="
           find . -name "*.apk" | tee apk_files.txt
           python3 -c '
-          import os
+          import os, re
           if os.path.exists("apk_files.txt"):
               with open("apk_files.txt") as f:
                   for line in f.read().splitlines():
@@ -55,12 +57,21 @@ jobs:
                           print(f"::notice title=DiscoveredAPK::{line.strip()}")
           if os.path.exists("gradle-build.log"):
               with open("gradle-build.log", errors="ignore") as f:
-                  lines = f.readlines()
-              for i, l in enumerate(lines[-50:]):
-                  l = l.strip().replace("\r", "").replace("\n", "")
-                  if l:
-                      print(f"::notice title=BuildLine_{i}::{l}")
+                  text = f.read()
+              for ft in re.findall(r"> Task ([^\n]+ FAILED)", text):
+                  print(f"::error title=FailedTask::{ft}")
+              if "* What went wrong:" in text:
+                  section = text.split("* What went wrong:")[1].split("* Try:")[0].strip()
+                  for l in section.splitlines()[:10]:
+                      if l.strip():
+                          print(f"::error title=WhatWentWrong::{l.strip()[:200]}")
+              for cb in re.findall(r"Caused by: ([^\n]+)", text)[:6]:
+                  print(f"::error title=CausedBy::{cb.strip()[:200]}")
           '
+          if [ "$GRADLE_EXIT" != "0" ] && [ -n "$GRADLE_EXIT" ]; then
+            echo "Failing step because Gradle exited with code $GRADLE_EXIT"
+            exit $GRADLE_EXIT
+          fi
 
       - name: Upload Build Log
         if: always()
