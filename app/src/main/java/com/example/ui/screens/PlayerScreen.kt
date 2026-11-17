@@ -141,6 +141,7 @@ import coil.compose.AsyncImage
 import com.example.data.model.PlaybackEngine
 import com.example.data.model.StremioSubtitle
 import com.example.data.model.UserPreferences
+import com.example.player.AspectMode
 import com.example.player.ExoPlayerController
 import com.example.player.PlaybackRequest
 import com.example.player.PlayerEpisodeItem
@@ -1275,9 +1276,9 @@ fun PlayerScreen(
                                     lastInteractionMs = System.currentTimeMillis()
                                     exoController.cycleAspectMode()
                                     val nextLabel = when (uiState.aspectMode) {
-                                        com.example.player.AspectMode.FIT -> "Zoom (Fill)"
-                                        com.example.player.AspectMode.ZOOM -> "Stretch"
-                                        com.example.player.AspectMode.STRETCH -> "Fit"
+                                        AspectMode.FIT -> "Zoom (Fill)"
+                                        AspectMode.ZOOM -> "Stretch"
+                                        AspectMode.STRETCH -> "Fit"
                                     }
                                     activeOverlayIcon = Icons.Rounded.AspectRatio
                                     activeOverlayProgress = null
