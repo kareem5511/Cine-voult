@@ -310,7 +310,7 @@ private fun CineVaultShell(
     }
 
     val hasActiveDownloads = remember(downloads) {
-        downloads.any { it.status == DownloadStatus.DOWNLOADING.name || it.status == DownloadStatus.PENDING.name }
+        downloads.any { it.status == DownloadStatus.DOWNLOADING.name || it.status == DownloadStatus.QUEUED.name }
     }
 
     val navItems = remember {

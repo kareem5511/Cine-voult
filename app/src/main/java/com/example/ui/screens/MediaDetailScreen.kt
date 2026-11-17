@@ -600,7 +600,7 @@ fun MediaDetailScreen(
 
                 // Stream Providers Section (dynamically populated from installed addons)
                 val streamProviders = remember(detailState.streams, detailState.streamAddonMap) {
-                    detailState.streamAddonMap.values.filter { it.isNotBlank() }.distinct()
+                    detailState.streamAddonMap.values.map { it.first }.filter { it.isNotBlank() }.distinct()
                 }
                 if (streamProviders.isNotEmpty()) {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
