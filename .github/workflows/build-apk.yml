@@ -57,16 +57,20 @@ jobs:
                           print(f"::notice title=DiscoveredAPK::{line.strip()}")
           if os.path.exists("gradle-build.log"):
               with open("gradle-build.log", errors="ignore") as f:
-                  text = f.read()
-              for ft in re.findall(r"> Task ([^\n]+ FAILED)", text):
-                  print(f"::error title=FailedTask::{ft}")
-              if "* What went wrong:" in text:
-                  section = text.split("* What went wrong:")[1].split("* Try:")[0].strip()
-                  for l in section.splitlines()[:10]:
-                      if l.strip():
-                          print(f"::error title=WhatWentWrong::{l.strip()[:200]}")
-              for cb in re.findall(r"Caused by: ([^\n]+)", text)[:6]:
-                  print(f"::error title=CausedBy::{cb.strip()[:200]}")
+                  lines = f.readlines()
+              # 1. Print all compiler errors (e: file:line:col error)
+              errs = [l.strip() for l in lines if l.strip().startswith("e: ") or ": error:" in l or "unresolved reference" in l.lower()]
+              for i, err in enumerate(errs[:15]):
+                  print(f"::error title=Kotlinc::{err[:250]}")
+              if not errs:
+                  text = "".join(lines)
+                  for ft in re.findall(r"> Task ([^\n]+ FAILED)", text):
+                      print(f"::error title=FailedTask::{ft}")
+                  if "* What went wrong:" in text:
+                      section = text.split("* What went wrong:")[1].split("* Try:")[0].strip()
+                      for l in section.splitlines()[:6]:
+                          if l.strip():
+                              print(f"::error title=WhatWentWrong::{l.strip()[:200]}")
           '
           if [ "$GRADLE_EXIT" != "0" ] && [ -n "$GRADLE_EXIT" ]; then
             echo "Failing step because Gradle exited with code $GRADLE_EXIT"
