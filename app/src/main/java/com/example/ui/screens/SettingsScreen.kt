@@ -119,7 +119,7 @@ fun SettingsScreen(
     // When user searches, expand matching sections automatically
     val q = searchQuery.trim().lowercase()
     val showAppearance = q.isEmpty() || "appearance theme color accent amoled grid dark".contains(q)
-    val showPlayback = q.isEmpty() || "playback engine exoplayer libmpv trailer audio codec intro stream hardware".contains(q)
+    val showPlayback = q.isEmpty() || "playback engine nextplayer trailer audio codec intro stream hardware ffmpeg".contains(q)
     val showSubtitles = q.isEmpty() || "subtitles sync font size color opacity delay language srt vtt".contains(q)
     val showDownloads = q.isEmpty() || "downloads storage wifi quality cache metadata limit".contains(q)
     val showBackup = q.isEmpty() || "backup sync apk account cloud signin signout version".contains(q)
@@ -380,48 +380,47 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                         color = Color.White
                     )
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    Surface(
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("nextplayer_engine_badge")
                     ) {
-                        PlaybackEngine.entries.forEach { engine ->
-                            FilterChip(
-                                selected = preferences.preferredEngine == engine.key,
-                                onClick = {
-                                    onUpdatePreferences { it.copy(preferredEngine = engine.key) }
-                                },
-                                label = { Text(engine.displayName, fontSize = 12.sp) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                    selectedLabelColor = Color.Black
-                                ),
-                                modifier = Modifier.testTag("engine_${engine.key.lowercase()}_chip")
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                Icons.Rounded.PlayCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(28.dp)
                             )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Next Player Engine",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "Integrated FFmpeg audio & video decoders with native hardware acceleration. Supports MKV, MP4, HLS, TS, DTS, TrueHD, AC3, EAC3, and SSA/ASS subtitles on all Snapdragon and MediaTek chipsets.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.White.copy(alpha = 0.72f)
+                                )
+                            }
                         }
                     }
-                    Text(
-                        text = "Auto mode routes HLS/MP4 streams to ExoPlayer, and MKV/WebM/DTS/TrueHD/anime subtitles to libmpv. Optimized for Qualcomm Snapdragon & MediaTek chipsets.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.65f)
-                    )
 
                     SettingsToggleRow(
                         title = "Hardware Video Acceleration",
-                        subtitle = "Use MediaCodec hardware decoder for 4K HDR playback efficiency",
+                        subtitle = "Use MediaCodec hardware decoder with FFmpeg software fallback",
                         checked = preferences.hardwareDecoding,
                         testTag = "hw_decoding_switch",
                         onCheckedChange = { checked ->
                             onUpdatePreferences { it.copy(hardwareDecoding = checked) }
-                        }
-                    )
-
-                    SettingsToggleRow(
-                        title = "Codec Compatibility Fallback",
-                        subtitle = "Automatically switch to native libmpv if ExoPlayer fails with unsupported codecs",
-                        checked = preferences.codecCompatibilityFallback,
-                        testTag = "codec_fallback_switch",
-                        onCheckedChange = { checked ->
-                            onUpdatePreferences { it.copy(codecCompatibilityFallback = checked) }
                         }
                     )
 
@@ -877,7 +876,7 @@ fun SettingsScreen(
                                 )
                             }
                             Text(
-                                text = "CineVault v2.4.0 (Pure AMOLED Edition)\nAndroid SDK 34 • libmpv v0.38 Native C++ JNI\nMedia3 ExoPlayer v1.4.1 • Stremio v11 Addon Protocol",
+                                text = "CineVault v2.4.0 (Pure AMOLED Edition)\nAndroid SDK 34 • NextPlayer FFmpeg Engine\nMedia3 NextLib Media3Ext • Stremio v11 Addon Protocol",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color.White.copy(alpha = 0.55f),
                                 lineHeight = 18.sp

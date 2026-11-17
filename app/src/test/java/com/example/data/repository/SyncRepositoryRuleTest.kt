@@ -74,7 +74,7 @@ class SyncRepositoryRuleTest : FirestoreEmulatorTestBase() {
 
         val prefs = UserPreferences(
             userId = uid,
-            preferredEngine = "LIBMPV",
+            preferredEngine = "NEXTPLAYER",
             hardwareDecoding = true,
             subtitleFontSizeSp = 22,
             subtitleColorHex = "#F5B74F",
@@ -91,7 +91,7 @@ class SyncRepositoryRuleTest : FirestoreEmulatorTestBase() {
         assertTrue("savePreferences failed: ${prefRes.exceptionOrNull()}", prefRes.isSuccess)
 
         val observedPrefs = withTimeout(FLOW_TIMEOUT_MS) {
-            repo.observePreferences().first { it.preferredEngine == "LIBMPV" }
+            repo.observePreferences().first { it.preferredEngine == "NEXTPLAYER" }
         }
         assertEquals("CINEMA_CYAN", observedPrefs.accentPreset)
         assertEquals("hi", observedPrefs.preferredAudioLang)

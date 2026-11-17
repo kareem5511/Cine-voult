@@ -25,6 +25,9 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.SubtitleView
+import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory
+import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.FfmpegSubtitleExtractorsFactory
+import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.withFfmpegSubtitles
 import com.example.CineVaultApplication
 import com.example.data.model.PlaybackEngine
 import com.example.data.model.StremioSubtitle
@@ -60,7 +63,7 @@ class ExoPlayerController(private val context: Context) {
     private var pendingSubBottomFraction: Float = 0.18f
     private var preferredAudioLanguage: String = ""
 
-    private val _state = MutableStateFlow(ActivePlaybackState(engine = PlaybackEngine.EXOPLAYER))
+    private val _state = MutableStateFlow(ActivePlaybackState(engine = PlaybackEngine.NEXTPLAYER))
     val state: StateFlow<ActivePlaybackState> = _state.asStateFlow()
 
     fun initialize(
@@ -94,7 +97,7 @@ class ExoPlayerController(private val context: Context) {
             .setUserAgent("CineVault-Android/1.0")
         val dataSourceFactory = DefaultDataSource.Factory(context, httpFactory)
 
-        val renderersFactory = DefaultRenderersFactory(context).apply {
+        val renderersFactory = NextRenderersFactory(context).apply {
             setExtensionRendererMode(
                 if (hardwareDecoding) DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
                 else DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
@@ -114,11 +117,13 @@ class ExoPlayerController(private val context: Context) {
         val meter = DefaultBandwidthMeter.Builder(context).build()
         bandwidthMeter = meter
 
-        val extractorsFactory = androidx.media3.extractor.DefaultExtractorsFactory()
-            .setConstantBitrateSeekingEnabled(true)
+        val extractorsFactory = FfmpegSubtitleExtractorsFactory()
+
+        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory, extractorsFactory)
+            .withFfmpegSubtitles(dataSourceFactory)
 
         val exo = ExoPlayer.Builder(context, renderersFactory)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory, extractorsFactory))
+            .setMediaSourceFactory(mediaSourceFactory)
             .setLoadControl(loadControl)
             .setBandwidthMeter(meter)
             .build()
@@ -169,7 +174,7 @@ class ExoPlayerController(private val context: Context) {
                     it.copy(
                         isBuffering = false,
                         isPlaying = false,
-                        errorMessage = error.localizedMessage ?: "ExoPlayer playback error"
+                        errorMessage = error.localizedMessage ?: "Playback error"
                     )
                 }
             }
@@ -178,7 +183,7 @@ class ExoPlayerController(private val context: Context) {
         player = exo
         _state.update {
             it.copy(
-                engine = PlaybackEngine.EXOPLAYER,
+                engine = PlaybackEngine.NEXTPLAYER,
                 hardwareDecodingActive = hardwareDecoding,
                 isEnded = false,
                 errorMessage = null
@@ -211,6 +216,13 @@ class ExoPlayerController(private val context: Context) {
 
         exo.setMediaItem(mediaItem)
         if (seekMs > 0L) exo.seekTo(seekMs)
+        exo.prepare()
+        exo.playWhenReady = true
+    }
+
+    fun retry() {
+        val exo = player ?: return
+        _state.update { it.copy(errorMessage = null, isBuffering = true) }
         exo.prepare()
         exo.playWhenReady = true
     }

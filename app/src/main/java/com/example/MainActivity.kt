@@ -165,7 +165,7 @@ import kotlinx.serialization.Serializable
     val backdropUrl: String = "",
     val imdbId: String = "",
     val initialPositionMs: Long = 0L,
-    val preferredEngine: String = "EXOPLAYER",
+    val preferredEngine: String = PlaybackEngine.NEXTPLAYER.key,
     val localSubtitleUri: String = "",
     val seriesId: String = "",
     val currentSeason: Int? = null,

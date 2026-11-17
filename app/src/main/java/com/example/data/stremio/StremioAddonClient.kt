@@ -221,7 +221,7 @@ class StremioAddonClient(
             id = StremioUrlHelper.BUILTIN_OPEN_CINEMA_KEY,
             name = "Open Cinema Vault",
             version = "1.0.0",
-            description = "Curated Creative Commons & open-source 4K/HD films with instant HLS & MP4 streams for ExoPlayer and libmpv testing.",
+            description = "Curated Creative Commons & open-source 4K/HD films with instant HLS & MP4 streams for Next Player testing.",
             types = listOf("movie"),
             resources = listOf("catalog", "meta", "stream", "subtitles")
         )

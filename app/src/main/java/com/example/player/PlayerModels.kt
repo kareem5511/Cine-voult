@@ -57,7 +57,7 @@ data class PlaybackRequest(
     val backdropUrl: String = "",
     val imdbId: String = "",
     val initialPositionMs: Long = 0L,
-    val preferredEngine: String = PlaybackEngine.EXOPLAYER.key,
+    val preferredEngine: String = PlaybackEngine.NEXTPLAYER.key,
     val localSubtitleUri: String = "",
     val availableSources: List<StreamSourceOption> = emptyList(),
     val upNext: UpNextInfo? = null,
@@ -84,7 +84,7 @@ enum class AspectMode(val label: String) {
 }
 
 data class ActivePlaybackState(
-    val engine: PlaybackEngine = PlaybackEngine.EXOPLAYER,
+    val engine: PlaybackEngine = PlaybackEngine.NEXTPLAYER,
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = true,
     val isEnded: Boolean = false,

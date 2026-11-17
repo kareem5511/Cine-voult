@@ -94,7 +94,7 @@ class LocalPreferencesStore(private val context: Context) {
 
     val preferencesFlow: Flow<UserPreferences> = context.cineVaultDataStore.data.map { prefs ->
         UserPreferences(
-            preferredEngine = prefs[Keys.ENGINE] ?: "AUTO",
+            preferredEngine = prefs[Keys.ENGINE] ?: "NEXTPLAYER",
             hardwareDecoding = prefs[Keys.HW_DECODING] ?: true,
             subtitleFontSizeSp = prefs[Keys.SUB_FONT_SIZE] ?: 18,
             subtitleColorHex = prefs[Keys.SUB_COLOR] ?: "#FFFFFF",

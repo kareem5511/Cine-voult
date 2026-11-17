@@ -84,7 +84,7 @@ class CineVaultUiRobolectricTest {
         var currentPrefs by androidx.compose.runtime.mutableStateOf(
             UserPreferences(
                 userId = "test_user",
-                preferredEngine = PlaybackEngine.EXOPLAYER.key,
+                preferredEngine = PlaybackEngine.NEXTPLAYER.key,
                 accentPreset = AccentPreset.TUNGSTEN_GOLD.key,
                 preferredAudioLang = "auto",
                 preferredSubtitleLang = "en"
@@ -110,10 +110,9 @@ class CineVaultUiRobolectricTest {
         composeRule.waitForIdle()
         assertEquals(AccentPreset.CINEMA_CYAN.key, currentPrefs.accentPreset)
 
-        composeRule.onNode(hasScrollToIndexAction()).performScrollToNode(hasTestTag("engine_libmpv_chip"))
-        composeRule.onNodeWithTag("engine_libmpv_chip").performScrollTo().performClick()
-        composeRule.waitForIdle()
-        assertEquals(PlaybackEngine.LIBMPV.key, currentPrefs.preferredEngine)
+        composeRule.onNode(hasScrollToIndexAction()).performScrollToNode(hasTestTag("nextplayer_engine_badge"))
+        composeRule.onNodeWithTag("nextplayer_engine_badge").performScrollTo().assertIsDisplayed()
+        assertEquals(PlaybackEngine.NEXTPLAYER.key, currentPrefs.preferredEngine)
 
         composeRule.onNode(hasScrollToIndexAction()).performScrollToNode(hasTestTag("audio_lang_hi"))
         composeRule.onNodeWithTag("audio_lang_hi").performScrollTo().performClick()
@@ -166,7 +165,7 @@ class CineVaultUiRobolectricTest {
                         streams = listOf(stream)
                     ),
                     isFavorited = false,
-                    preferredEngine = PlaybackEngine.EXOPLAYER,
+                    preferredEngine = PlaybackEngine.NEXTPLAYER,
                     onBack = {},
                     onToggleFavorite = {},
                     onPlayStream = { _, engine -> playedEngine = engine },
@@ -183,7 +182,7 @@ class CineVaultUiRobolectricTest {
         assertEquals(0, composeRule.onAllNodesWithText("libmpv").fetchSemanticsNodes().size)
 
         composeRule.onNodeWithTag("play_primary_button").performClick()
-        assertEquals(PlaybackEngine.EXOPLAYER, playedEngine)
+        assertEquals(PlaybackEngine.NEXTPLAYER, playedEngine)
     }
 
     @Test
@@ -227,7 +226,7 @@ class CineVaultUiRobolectricTest {
                     ),
                     continueWatching = cwItems,
                     compactGrid = false,
-                    preferredEngine = PlaybackEngine.EXOPLAYER,
+                    preferredEngine = PlaybackEngine.NEXTPLAYER,
                     onSearchChange = {},
                     onTypeSelected = {},
                     onRefresh = {},
@@ -293,7 +292,7 @@ class CineVaultUiRobolectricTest {
                         streams = listOf(stream4k, stream1080)
                     ),
                     isFavorited = false,
-                    preferredEngine = PlaybackEngine.EXOPLAYER,
+                    preferredEngine = PlaybackEngine.NEXTPLAYER,
                     onBack = {},
                     onToggleFavorite = {},
                     onPlayStream = { _, _ -> },
@@ -345,7 +344,7 @@ class CineVaultUiRobolectricTest {
                         streams = listOf(externalOnlyStream)
                     ),
                     isFavorited = false,
-                    preferredEngine = PlaybackEngine.LIBMPV,
+                    preferredEngine = PlaybackEngine.NEXTPLAYER,
                     onBack = {},
                     onToggleFavorite = {},
                     onPlayStream = { _, _ -> },
@@ -467,7 +466,7 @@ class CineVaultUiRobolectricTest {
                         streams = listOf(stream)
                     ),
                     isFavorited = false,
-                    preferredEngine = PlaybackEngine.EXOPLAYER,
+                    preferredEngine = PlaybackEngine.NEXTPLAYER,
                     onBack = {},
                     onToggleFavorite = {},
                     onPlayStream = { _, _ -> },
@@ -509,7 +508,7 @@ class CineVaultUiRobolectricTest {
                     ),
                     downloads = emptyList(),
                     localMedia = emptyList(),
-                    preferredEngine = PlaybackEngine.EXOPLAYER,
+                    preferredEngine = PlaybackEngine.NEXTPLAYER,
                     onAddPersonalCloudMedia = { _, _, _, _ -> },
                     onRemoveLibraryItem = {},
                     onImportLocalVideo = {},
@@ -573,7 +572,7 @@ class CineVaultUiRobolectricTest {
                     ),
                     continueWatching = emptyList(),
                     compactGrid = false,
-                    preferredEngine = PlaybackEngine.EXOPLAYER,
+                    preferredEngine = PlaybackEngine.NEXTPLAYER,
                     autoPlayTrailers = TrailerAutoPlayMode.ALWAYS.key,
                     onSearchChange = {},
                     onTypeSelected = {},
@@ -619,7 +618,7 @@ class CineVaultUiRobolectricTest {
                         streams = listOf(stream)
                     ),
                     isFavorited = false,
-                    preferredEngine = PlaybackEngine.EXOPLAYER,
+                    preferredEngine = PlaybackEngine.NEXTPLAYER,
                     onBack = {},
                     onToggleFavorite = {},
                     onPlayStream = { _, _ -> },

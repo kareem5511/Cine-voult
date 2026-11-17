@@ -172,8 +172,8 @@ fun AuthScreen(
                     )
                     FeatureRow(
                         icon = Icons.Rounded.HighQuality,
-                        title = "ExoPlayer & libmpv Engines",
-                        subtitle = "Switch hardware decoders on the fly for any container"
+                        title = "Next Player FFmpeg Engine",
+                        subtitle = "Hardware acceleration & FFmpeg decoders for all video/audio formats"
                     )
                     FeatureRow(
                         icon = Icons.Rounded.CloudSync,

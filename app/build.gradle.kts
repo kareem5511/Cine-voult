@@ -159,7 +159,7 @@ dependencies {
   implementation(libs.androidx.media3.exoplayer.dash)
   implementation(libs.androidx.media3.ui)
   implementation(libs.androidx.media3.datasource.okhttp)
-  implementation(libs.libmpv)
+  implementation(libs.nextlib.media3ext)
   implementation(libs.androidx.work.runtime.ktx)
   implementation(libs.kotlinx.serialization.json)
   implementation(libs.kotlinx.coroutines.android)

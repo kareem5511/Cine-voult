@@ -48,7 +48,7 @@ data class LibraryMediaItem(
 data class UserPreferences(
     @DocumentId val id: String = "",
     val userId: String = "",
-    val preferredEngine: String = "AUTO", // AUTO | EXOPLAYER | LIBMPV
+    val preferredEngine: String = "NEXTPLAYER", // NEXTPLAYER (powered by Next Player FFmpeg engine)
     val hardwareDecoding: Boolean = true,
     val subtitleFontSizeSp: Int = 18,
     val subtitleColorHex: String = "#FFFFFF",
@@ -77,13 +77,13 @@ data class UserPreferences(
 )
 
 enum class PlaybackEngine(val key: String, val displayName: String) {
-    AUTO("AUTO", "Auto (Smart Selection)"),
-    EXOPLAYER("EXOPLAYER", "Media3 ExoPlayer"),
-    LIBMPV("LIBMPV", "libmpv (MPV)");
+    NEXTPLAYER("NEXTPLAYER", "Next Player"),
+    AUTO("AUTO", "Next Player"),
+    EXOPLAYER("EXOPLAYER", "Next Player"),
+    LIBMPV("LIBMPV", "Next Player");
 
     companion object {
-        fun fromKey(key: String?): PlaybackEngine =
-            entries.firstOrNull { it.key == key } ?: AUTO
+        fun fromKey(key: String?): PlaybackEngine = NEXTPLAYER
     }
 }
 

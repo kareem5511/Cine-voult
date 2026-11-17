@@ -142,7 +142,6 @@ import com.example.data.model.PlaybackEngine
 import com.example.data.model.StremioSubtitle
 import com.example.data.model.UserPreferences
 import com.example.player.ExoPlayerController
-import com.example.player.LibMpvController
 import com.example.player.PlaybackRequest
 import com.example.player.PlayerEpisodeItem
 import com.example.player.StreamAutoMatcher
@@ -174,21 +173,6 @@ fun PlayerScreen(
         context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
     }
 
-    val initialEngine = remember(request.preferredEngine, request.streamUrl) {
-        val configured = PlaybackEngine.fromKey(request.preferredEngine)
-        if (configured == PlaybackEngine.AUTO) {
-            val url = request.streamUrl.lowercase()
-            if (url.contains(".mkv") || url.contains(".webm") || url.contains("mkv") ||
-                url.contains("dts") || url.contains("truehd") || url.contains(".ass") || url.contains(".ssa")) {
-                PlaybackEngine.LIBMPV
-            } else {
-                PlaybackEngine.EXOPLAYER
-            }
-        } else {
-            configured
-        }
-    }
-    var activeEngine by remember { mutableStateOf(initialEngine) }
     var activeMediaKey by remember { mutableStateOf(request.mediaKey) }
     var activeTitle by remember { mutableStateOf(request.title) }
     val baseShowTitle = remember(request.title) {
@@ -348,38 +332,7 @@ fun PlayerScreen(
     }
 
     val exoController = remember { ExoPlayerController(context) }
-    val mpvController = remember { LibMpvController(context) }
-
-    val exoState by exoController.state.collectAsStateWithLifecycle()
-    val mpvState by mpvController.state.collectAsStateWithLifecycle()
-    val uiState = if (activeEngine == PlaybackEngine.EXOPLAYER) exoState else mpvState
-
-    // Automatic Codec Fallback: If ExoPlayer fails with decoder/codec unsupported error, switch to native libmpv seamlessly
-    var hasAttemptedCodecFallback by remember(activeStreamUrl) { mutableStateOf(false) }
-    LaunchedEffect(exoState.errorMessage, activeEngine, hasAttemptedCodecFallback) {
-        val err = exoState.errorMessage
-        if (!hasAttemptedCodecFallback && activeEngine == PlaybackEngine.EXOPLAYER && !err.isNullOrBlank()) {
-            val isCodecOrDecoderError = err.contains("decoder", ignoreCase = true) ||
-                err.contains("codec", ignoreCase = true) ||
-                err.contains("format", ignoreCase = true) ||
-                err.contains("extract", ignoreCase = true) ||
-                err.contains("audio", ignoreCase = true) ||
-                err.contains("unsupported", ignoreCase = true) ||
-                err.contains("ParserException", ignoreCase = true) ||
-                err.contains("MediaCodec", ignoreCase = true) ||
-                err.contains("BehindLiveWindowException", ignoreCase = true)
-
-            if (isCodecOrDecoderError) {
-                hasAttemptedCodecFallback = true
-                android.widget.Toast.makeText(
-                    context,
-                    "Switched to native libmpv engine for audio/video compatibility",
-                    android.widget.Toast.LENGTH_SHORT
-                ).show()
-                activeEngine = PlaybackEngine.LIBMPV
-            }
-        }
-    }
+    val uiState by exoController.state.collectAsStateWithLifecycle()
 
     // Resolve sources/subtitles dynamically if missing (e.g. launched from Vault or Up Next)
     LaunchedEffect(activeImdbId, activeMediaType) {
@@ -403,55 +356,30 @@ fun PlayerScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { subUri: Uri? ->
         if (subUri != null) {
-            if (activeEngine == PlaybackEngine.EXOPLAYER) {
-                exoController.addLocalSubtitle(subUri)
-            } else {
-                mpvController.addLocalSubtitle(subUri)
-            }
+            exoController.addLocalSubtitle(subUri)
         }
     }
 
-    // Initialize or switch playback engine / stream source
-    LaunchedEffect(activeEngine, activeStreamUrl) {
+    // Initialize or switch stream source
+    LaunchedEffect(activeStreamUrl) {
         if (activeStreamUrl.isBlank()) return@LaunchedEffect
-        val resumePos = when {
-            exoState.positionMs > 0L -> exoState.positionMs
-            mpvState.positionMs > 0L -> mpvState.positionMs
-            else -> activeInitialSeekMs
-        }
+        val resumePos = if (uiState.positionMs > 0L) uiState.positionMs else activeInitialSeekMs
         activeInitialSeekMs = 0L
 
-        if (activeEngine == PlaybackEngine.EXOPLAYER) {
-            mpvController.release()
-            exoController.initialize(
-                streamUrl = activeStreamUrl,
-                initialPositionMs = resumePos,
-                hardwareDecoding = preferences.hardwareDecoding,
-                preferredAudioLang = preferences.preferredAudioLang,
-                preferredSubtitleLang = preferences.preferredSubtitleLang,
-                subtitles = activeSubtitles,
-                localSubtitleUri = activeLocalSubUri
-            )
-        } else {
-            exoController.release()
-            mpvController.initialize(
-                streamUrl = activeStreamUrl,
-                initialPositionMs = resumePos,
-                hardwareDecoding = preferences.hardwareDecoding,
-                preferences = preferences,
-                subtitles = activeSubtitles,
-                localSubtitleUri = activeLocalSubUri
-            )
-        }
+        exoController.initialize(
+            streamUrl = activeStreamUrl,
+            initialPositionMs = resumePos,
+            hardwareDecoding = preferences.hardwareDecoding,
+            preferredAudioLang = preferences.preferredAudioLang,
+            preferredSubtitleLang = preferences.preferredSubtitleLang,
+            subtitles = activeSubtitles,
+            localSubtitleUri = activeLocalSubUri
+        )
     }
 
-    // Only apply subtitle styles when preferences actually change (avoids layout thrash on 500ms ticks)
-    LaunchedEffect(preferences, activeEngine) {
-        if (activeEngine == PlaybackEngine.EXOPLAYER) {
-            exoController.applySubtitleStyle(preferences)
-        } else {
-            mpvController.applySubtitleOptions(preferences)
-        }
+    // Only apply subtitle styles when preferences actually change
+    LaunchedEffect(preferences) {
+        exoController.applySubtitleStyle(preferences)
     }
 
     // Dynamic subtitle vertical offset so captions never overlap bottom player controls
@@ -459,12 +387,8 @@ fun PlayerScreen(
         targetValue = if (controlsVisible && !isScreenLocked) 0.19f else 0.06f,
         label = "subtitle_bottom_fraction"
     )
-    LaunchedEffect(subtitleBottomFraction, activeEngine, controlsVisible, isScreenLocked) {
-        if (activeEngine == PlaybackEngine.EXOPLAYER) {
-            exoController.setSubtitleBottomPadding(subtitleBottomFraction)
-        } else {
-            mpvController.setSubtitleBottomPadding(controlsVisible && !isScreenLocked)
-        }
+    LaunchedEffect(subtitleBottomFraction) {
+        exoController.setSubtitleBottomPadding(subtitleBottomFraction)
     }
 
     // Auto-hide controls smoothly during active playback (pauses while dropdown or modal sheets are open)
@@ -488,26 +412,16 @@ fun PlayerScreen(
         }
     }
 
-    // Poll ExoPlayer position & sync watch progress periodically
-    LaunchedEffect(activeEngine, activeMediaKey) {
+    // Poll player position & sync watch progress periodically
+    LaunchedEffect(activeMediaKey) {
         var tick = 0
         while (true) {
             delay(500L)
-            if (activeEngine == PlaybackEngine.EXOPLAYER) {
-                exoController.pollPosition()
-            }
+            exoController.pollPosition()
             tick++
             if (tick % 10 == 0) {
-                val pos = if (activeEngine == PlaybackEngine.EXOPLAYER) {
-                    exoController.currentPositionMs()
-                } else {
-                    mpvState.positionMs
-                }
-                val dur = if (activeEngine == PlaybackEngine.EXOPLAYER) {
-                    exoController.currentDurationMs()
-                } else {
-                    mpvState.durationMs
-                }
+                val pos = exoController.currentPositionMs()
+                val dur = exoController.currentDurationMs()
                 if (pos > 0L) {
                     onUpdateProgress(activeMediaKey, activeTitle, activeMediaType, activePosterUrl, activeStreamUrl, pos, dur)
                 }
@@ -546,16 +460,8 @@ fun PlayerScreen(
         isLandscape = true
 
         onDispose {
-            val pos = if (activeEngine == PlaybackEngine.EXOPLAYER) {
-                exoController.currentPositionMs()
-            } else {
-                mpvState.positionMs
-            }
-            val dur = if (activeEngine == PlaybackEngine.EXOPLAYER) {
-                exoController.currentDurationMs()
-            } else {
-                mpvState.durationMs
-            }
+            val pos = exoController.currentPositionMs()
+            val dur = exoController.currentDurationMs()
             if (pos > 0L) {
                 onUpdateProgress(activeMediaKey, activeTitle, activeMediaType, activePosterUrl, activeStreamUrl, pos, dur)
             }
@@ -573,7 +479,6 @@ fun PlayerScreen(
             }
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             exoController.release()
-            mpvController.release()
         }
     }
 
@@ -651,7 +556,6 @@ fun PlayerScreen(
                 activeStreamUrl = bestMatch.streamUrl
             } else {
                 exoController.release()
-                mpvController.release()
                 activeMediaKey = epId
                 activeTitle = formattedTitle
                 activeMediaType = "series"
@@ -749,8 +653,7 @@ fun PlayerScreen(
                         }
                         val width = size.width.coerceAtLeast(1)
                         val seekDelta = if (offset.x < width / 2f) -10_000L else 10_000L
-                        if (activeEngine == PlaybackEngine.EXOPLAYER) exoController.seekBy(seekDelta)
-                        else mpvController.seekBy(seekDelta)
+                        exoController.seekBy(seekDelta)
                         activeOverlayIcon = if (seekDelta < 0) Icons.Rounded.Replay10 else Icons.Rounded.Forward10
                         activeOverlayProgress = null
                         activeOverlayHud = if (seekDelta < 0) "-10s" else "+10s"
@@ -759,7 +662,7 @@ fun PlayerScreen(
                     }
                 )
             }
-            .pointerInput(isScreenLocked, maxMusicVol, activeEngine) {
+            .pointerInput(isScreenLocked, maxMusicVol) {
                 detectDragGestures(
                     onDragStart = { _ ->
                         if (isScreenLocked) return@detectDragGestures
@@ -769,8 +672,7 @@ fun PlayerScreen(
                     },
                     onDragEnd = {
                         if (gestureMode == "seek" && !isScreenLocked && latestUiState.durationMs > 0L) {
-                            if (activeEngine == PlaybackEngine.EXOPLAYER) exoController.seekTo(seekPreviewTargetMs)
-                            else mpvController.seekTo(seekPreviewTargetMs)
+                            exoController.seekTo(seekPreviewTargetMs)
                         }
                         gestureMode = null
                     },
@@ -813,25 +715,14 @@ fun PlayerScreen(
                 )
             }
     ) {
-        if (activeEngine == PlaybackEngine.EXOPLAYER) {
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).also { pv ->
-                        exoController.attachPlayerView(pv, preferences)
-                    }
-                },
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            AndroidView(
-                factory = { ctx ->
-                    SurfaceView(ctx).also { sv ->
-                        mpvController.attachSurfaceView(sv)
-                    }
-                },
-                modifier = Modifier.fillMaxSize()
-            )
-        }
+        AndroidView(
+            factory = { ctx ->
+                PlayerView(ctx).also { pv ->
+                    exoController.attachPlayerView(pv, preferences)
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
 
         if ((uiState.isBuffering || isResolvingEpisodeStreams) && uiState.errorMessage == null && episodeEmptyError == null) {
             Column(
@@ -1028,20 +919,10 @@ fun PlayerScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Button(
                             onClick = {
-                                activeEngine = if (activeEngine == PlaybackEngine.EXOPLAYER) {
-                                    PlaybackEngine.LIBMPV
-                                } else {
-                                    PlaybackEngine.EXOPLAYER
-                                }
+                                exoController.retry()
                             }
                         ) {
-                            Text(
-                                text = if (activeEngine == PlaybackEngine.LIBMPV) {
-                                    "Use ExoPlayer"
-                                } else {
-                                    "Use libmpv"
-                                }
-                            )
+                            Text("Retry")
                         }
                         if (availableSources.size > 1) {
                             OutlinedButton(onClick = { showSourcesSheet = true }) {
@@ -1129,27 +1010,27 @@ fun PlayerScreen(
                                 .clip(RoundedCornerShape(12.dp))
                                 .clickable {
                                     lastInteractionMs = System.currentTimeMillis()
-                                    activeEngine = if (activeEngine == PlaybackEngine.EXOPLAYER) {
-                                        PlaybackEngine.LIBMPV
-                                    } else {
-                                        PlaybackEngine.EXOPLAYER
-                                    }
+                                    exoController.cycleAspectMode()
                                 }
-                                .testTag("player_engine_switch")
+                                .testTag("player_aspect_mode_button")
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    Icons.Rounded.SwapHoriz,
-                                    contentDescription = "Switch player engine",
+                                    Icons.Rounded.AspectRatio,
+                                    contentDescription = "Aspect ratio",
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = if (activeEngine == PlaybackEngine.EXOPLAYER) "Use libmpv" else "Use ExoPlayer",
+                                    text = when (uiState.aspectMode) {
+                                        AspectMode.FIT -> "Fit"
+                                        AspectMode.ZOOM -> "Fill"
+                                        AspectMode.STRETCH -> "Stretch"
+                                    },
                                     style = MaterialTheme.typography.labelLarge,
                                     color = MaterialTheme.colorScheme.primary
                                 )
@@ -1167,8 +1048,7 @@ fun PlayerScreen(
                     IconButton(
                         onClick = {
                             lastInteractionMs = System.currentTimeMillis()
-                            if (activeEngine == PlaybackEngine.EXOPLAYER) exoController.seekBy(-10_000L)
-                            else mpvController.seekBy(-10_000L)
+                            exoController.seekBy(-10_000L)
                         },
                         modifier = Modifier.size(56.dp)
                     ) {
@@ -1188,8 +1068,7 @@ fun PlayerScreen(
                             .clip(CircleShape)
                             .clickable {
                                 lastInteractionMs = System.currentTimeMillis()
-                                if (activeEngine == PlaybackEngine.EXOPLAYER) exoController.togglePlayPause()
-                                else mpvController.togglePlayPause()
+                                exoController.togglePlayPause()
                             }
                             .testTag("player_play_pause_button")
                     ) {
@@ -1206,8 +1085,7 @@ fun PlayerScreen(
                     IconButton(
                         onClick = {
                             lastInteractionMs = System.currentTimeMillis()
-                            if (activeEngine == PlaybackEngine.EXOPLAYER) exoController.seekBy(10_000L)
-                            else mpvController.seekBy(10_000L)
+                            exoController.seekBy(10_000L)
                         },
                         modifier = Modifier.size(56.dp)
                     ) {
@@ -1287,7 +1165,7 @@ fun PlayerScreen(
                                 }
                             } else {
                                 Text(
-                                    text = activeEngine.displayName,
+                                    text = "Next Player",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.primary
                                 )
@@ -1320,8 +1198,7 @@ fun PlayerScreen(
                         durationMs = uiState.durationMs,
                         onSeekTo = { target ->
                             lastInteractionMs = System.currentTimeMillis()
-                            if (activeEngine == PlaybackEngine.EXOPLAYER) exoController.seekTo(target)
-                            else mpvController.seekTo(target)
+                            exoController.seekTo(target)
                         }
                     )
 
@@ -1396,8 +1273,7 @@ fun PlayerScreen(
                             IconButton(
                                 onClick = {
                                     lastInteractionMs = System.currentTimeMillis()
-                                    if (activeEngine == PlaybackEngine.EXOPLAYER) exoController.cycleAspectMode()
-                                    else mpvController.cycleAspectMode()
+                                    exoController.cycleAspectMode()
                                     val nextLabel = when (uiState.aspectMode) {
                                         com.example.player.AspectMode.FIT -> "Zoom (Fill)"
                                         com.example.player.AspectMode.ZOOM -> "Stretch"
@@ -1431,8 +1307,7 @@ fun PlayerScreen(
                 onClick = {
                     introSkipped = true
                     val target = (uiState.positionMs + 85_000L).coerceAtMost(uiState.durationMs - 1_000L)
-                    if (activeEngine == PlaybackEngine.EXOPLAYER) exoController.seekTo(target)
-                    else mpvController.seekTo(target)
+                    exoController.seekTo(target)
                 },
                 shape = RoundedCornerShape(24.dp),
                 modifier = Modifier.testTag("player_skip_intro_button")
@@ -1765,11 +1640,7 @@ fun PlayerScreen(
             sources = availableSources,
             activeStreamUrl = activeStreamUrl,
             onSelectSource = { source ->
-                activeInitialSeekMs = if (activeEngine == PlaybackEngine.EXOPLAYER) {
-                    exoController.currentPositionMs()
-                } else {
-                    mpvState.positionMs
-                }
+                activeInitialSeekMs = exoController.currentPositionMs()
                 val fp = StreamAutoMatcher.extractFingerprint(source)
                 activeStreamPreference = fp
                 onSaveStreamPreference(fp)
@@ -1784,10 +1655,8 @@ fun PlayerScreen(
         SubtitleStudioSheet(
             tracks = uiState.subtitleTracks,
             delayMs = uiState.activeSubtitleDelayMs,
-            isLibMpv = activeEngine == PlaybackEngine.LIBMPV,
             onSelectTrack = { track ->
-                if (activeEngine == PlaybackEngine.EXOPLAYER) exoController.selectSubtitleTrack(track)
-                else mpvController.selectSubtitleTrack(track)
+                exoController.selectSubtitleTrack(track)
                 showSubtitleSheet = false
             },
             onImportFile = {
@@ -1795,9 +1664,6 @@ fun PlayerScreen(
             },
             onChangeDelay = { newDelay ->
                 onUpdateSubtitleDelay(newDelay)
-                if (activeEngine == PlaybackEngine.LIBMPV) {
-                    mpvController.setSubtitleDelayMs(newDelay)
-                }
             },
             onDismiss = { showSubtitleSheet = false }
         )
@@ -1807,8 +1673,7 @@ fun PlayerScreen(
         AudioTrackSheet(
             tracks = uiState.audioTracks,
             onSelect = { id ->
-                if (activeEngine == PlaybackEngine.EXOPLAYER) exoController.selectAudioTrack(id)
-                else mpvController.selectAudioTrack(id)
+                exoController.selectAudioTrack(id)
                 showAudioSheet = false
             },
             onDismiss = { showAudioSheet = false }
@@ -1819,8 +1684,7 @@ fun PlayerScreen(
         SpeedSheet(
             currentSpeed = uiState.playbackSpeed,
             onSelectSpeed = { speed ->
-                if (activeEngine == PlaybackEngine.EXOPLAYER) exoController.setSpeed(speed)
-                else mpvController.setSpeed(speed)
+                exoController.setSpeed(speed)
                 showSpeedSheet = false
             },
             onDismiss = { showSpeedSheet = false }
@@ -2080,7 +1944,6 @@ private fun VideoSourceSwitchSheet(
 private fun SubtitleStudioSheet(
     tracks: List<com.example.player.PlayerTrackInfo>,
     delayMs: Int,
-    isLibMpv: Boolean,
     onSelectTrack: (com.example.player.PlayerTrackInfo?) -> Unit,
     onImportFile: () -> Unit,
     onChangeDelay: (Int) -> Unit,
@@ -2106,45 +1969,43 @@ private fun SubtitleStudioSheet(
                 }
             }
 
-            if (isLibMpv) {
-                Column(
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = "Sync Offset: ${if (delayMs > 0) "+${delayMs}ms" else "${delayMs}ms"}",
+                    style = MaterialTheme.typography.labelLarge
+                )
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(
-                        text = "Sync Offset: ${if (delayMs > 0) "+${delayMs}ms" else "${delayMs}ms"}",
-                        style = MaterialTheme.typography.labelLarge
+                    FilterChip(
+                        selected = false,
+                        onClick = { onChangeDelay(delayMs - 100) },
+                        label = { Text("-0.1s") }
                     )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        FilterChip(
-                            selected = false,
-                            onClick = { onChangeDelay(delayMs - 100) },
-                            label = { Text("-0.1s") }
-                        )
-                        FilterChip(
-                            selected = false,
-                            onClick = { onChangeDelay(delayMs + 100) },
-                            label = { Text("+0.1s") }
-                        )
-                        FilterChip(
-                            selected = false,
-                            onClick = { onChangeDelay(delayMs - 250) },
-                            label = { Text("-0.25s") }
-                        )
-                        FilterChip(
-                            selected = false,
-                            onClick = { onChangeDelay(delayMs + 250) },
-                            label = { Text("+0.25s") }
-                        )
-                        FilterChip(
-                            selected = delayMs == 0,
-                            onClick = { onChangeDelay(0) },
-                            label = { Text("0s") }
-                        )
-                    }
+                    FilterChip(
+                        selected = false,
+                        onClick = { onChangeDelay(delayMs + 100) },
+                        label = { Text("+0.1s") }
+                    )
+                    FilterChip(
+                        selected = false,
+                        onClick = { onChangeDelay(delayMs - 250) },
+                        label = { Text("-0.25s") }
+                    )
+                    FilterChip(
+                        selected = false,
+                        onClick = { onChangeDelay(delayMs + 250) },
+                        label = { Text("+0.25s") }
+                    )
+                    FilterChip(
+                        selected = delayMs == 0,
+                        onClick = { onChangeDelay(0) },
+                        label = { Text("0s") }
+                    )
                 }
             }
 
