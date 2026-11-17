@@ -1225,7 +1225,7 @@ private fun CatalogFullBrowserScreen(
     val sortedItems = remember(section.items, sortOption) {
         when (sortOption) {
             "Highest IMDb" -> section.items.sortedByDescending { it.imdbRating?.toDoubleOrNull() ?: 0.0 }
-            "Newest First" -> section.items.sortedByDescending { it.year?.filter { c -> c.isDigit() }?.toIntOrNull() ?: 0 }
+            "Newest First" -> section.items.sortedByDescending { it.releaseInfo?.filter { c -> c.isDigit() }?.take(4)?.toIntOrNull() ?: 0 }
             else -> section.items
         }
     }

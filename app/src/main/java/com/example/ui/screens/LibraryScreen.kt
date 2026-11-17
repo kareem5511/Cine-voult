@@ -61,7 +61,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.PrimaryScrollableTabRow
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
@@ -182,21 +182,12 @@ fun LibraryScreen(
             "Local" to localMedia.size
         )
 
-        PrimaryScrollableTabRow(
+        ScrollableTabRow(
             selectedTabIndex = selectedTab,
             containerColor = Color.Black,
             contentColor = MaterialTheme.colorScheme.primary,
             edgePadding = 16.dp,
-            divider = {},
-            indicator = { tabPositions ->
-                if (selectedTab < tabPositions.size) {
-                    TabRowDefaults.PrimaryIndicator(
-                        modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                        color = MaterialTheme.colorScheme.primary,
-                        height = 2.5.dp
-                    )
-                }
-            }
+            divider = {}
         ) {
             tabTitles.forEachIndexed { index, (label, count) ->
                 Tab(
