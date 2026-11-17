@@ -12,12 +12,12 @@ plugins {
 
 android {
   namespace = "com.example"
-  compileSdk = 35
+  compileSdk = 36
 
   defaultConfig {
     applicationId = "com.aistudio.cinevault.mrxkqp"
     minSdk = 24
-    targetSdk = 35
+    targetSdk = 36
     versionCode = 6
     versionName = "1.2.3"
 
