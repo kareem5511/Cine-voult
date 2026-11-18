@@ -18,9 +18,15 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Switch
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -143,6 +149,7 @@ import com.example.data.model.StremioSubtitle
 import com.example.data.model.UserPreferences
 import com.example.player.AspectMode
 import com.example.player.ExoPlayerController
+import com.example.player.LocalPipMode
 import com.example.player.PlaybackRequest
 import com.example.player.PlayerEpisodeItem
 import com.example.player.StreamAutoMatcher
@@ -152,6 +159,35 @@ import com.example.player.UpNextInfo
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+
+@Composable
+private fun Modifier.bouncyClickable(
+    scaleDown: Float = 0.88f,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+): Modifier {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) scaleDown else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "bouncy_click_scale"
+    )
+    return this
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+        .clickable(
+            interactionSource = interactionSource,
+            indication = null,
+            enabled = enabled,
+            onClick = onClick
+        )
+}
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -632,14 +668,16 @@ fun PlayerScreen(
     val latestUiState by rememberUpdatedState(uiState)
     val latestBrightness by rememberUpdatedState(brightnessLevel)
     val latestVolume by rememberUpdatedState(volumeLevel)
+    val isPipMode = LocalPipMode.current
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(isScreenLocked) {
+            .pointerInput(isScreenLocked, isPipMode) {
                 detectTapGestures(
                     onTap = {
+                        if (isPipMode) return@detectTapGestures
                         if (isScreenLocked) {
                             showUnlockButton = !showUnlockButton
                         } else {
@@ -648,6 +686,7 @@ fun PlayerScreen(
                         }
                     },
                     onDoubleTap = { offset ->
+                        if (isPipMode) return@detectTapGestures
                         if (isScreenLocked) {
                             showUnlockButton = true
                             return@detectTapGestures
@@ -663,10 +702,10 @@ fun PlayerScreen(
                     }
                 )
             }
-            .pointerInput(isScreenLocked, maxMusicVol) {
+            .pointerInput(isScreenLocked, maxMusicVol, isPipMode) {
                 detectDragGestures(
                     onDragStart = { _ ->
-                        if (isScreenLocked) return@detectDragGestures
+                        if (isPipMode || isScreenLocked) return@detectDragGestures
                         gestureMode = null
                         seekDragAccumX = 0f
                         seekPreviewTargetMs = latestUiState.positionMs
@@ -725,7 +764,7 @@ fun PlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        if ((uiState.isBuffering || isResolvingEpisodeStreams) && uiState.errorMessage == null && episodeEmptyError == null) {
+        if ((uiState.isBuffering || isResolvingEpisodeStreams) && uiState.errorMessage == null && episodeEmptyError == null && !isPipMode) {
             Column(
                 modifier = Modifier
                     .align(Alignment.Center)
@@ -749,7 +788,7 @@ fun PlayerScreen(
 
         // Auto-Matched Stream Confirmation Toast (fades out after 3 seconds)
         AnimatedVisibility(
-            visible = !autoMatchToast.isNullOrBlank(),
+            visible = !autoMatchToast.isNullOrBlank() && !isPipMode,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier
@@ -787,7 +826,7 @@ fun PlayerScreen(
 
         // Transient Touch Gesture Feedback Pill (Brightness / Volume / Seek) — sliders stay hidden
         AnimatedVisibility(
-            visible = !activeOverlayHud.isNullOrBlank(),
+            visible = !activeOverlayHud.isNullOrBlank() && !isPipMode,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier
@@ -834,7 +873,7 @@ fun PlayerScreen(
 
         // Screen Unlock Floating Pill (when locked)
         AnimatedVisibility(
-            visible = isScreenLocked && showUnlockButton,
+            visible = isScreenLocked && showUnlockButton && !isPipMode,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier
@@ -858,7 +897,7 @@ fun PlayerScreen(
             }
         }
 
-        if (!episodeEmptyError.isNullOrBlank()) {
+        if (!episodeEmptyError.isNullOrBlank() && !isPipMode) {
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.96f),
                 shape = RoundedCornerShape(20.dp),
@@ -899,7 +938,7 @@ fun PlayerScreen(
                     }
                 }
             }
-        } else if (!uiState.errorMessage.isNullOrBlank()) {
+        } else if (!uiState.errorMessage.isNullOrBlank() && !isPipMode) {
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.94f),
                 shape = RoundedCornerShape(18.dp),
@@ -936,7 +975,7 @@ fun PlayerScreen(
         }
 
         AnimatedVisibility(
-            visible = controlsVisible && !isScreenLocked,
+            visible = controlsVisible && !isScreenLocked && !isPipMode,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.fillMaxSize()
@@ -948,7 +987,7 @@ fun PlayerScreen(
                     .windowInsetsPadding(WindowInsets.safeDrawing)
                     .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
-                // Top Bar: Back (Top-Left Only), Lock, Screen Rotation, Engine Switcher
+                // Top Bar: Back (Top-Left Only), Lock, Screen Rotation
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -956,145 +995,143 @@ fun PlayerScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(
-                        onClick = onClose,
-                        modifier = Modifier.testTag("player_back_button")
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.45f))
+                            .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.20f)), CircleShape)
+                            .bouncyClickable(scaleDown = 0.88f, onClick = onClose)
+                            .testTag("player_back_button"),
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = "Close player",
-                            tint = Color.White
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
                         )
                     }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-
-                        IconButton(
-                            onClick = {
-                                val nextLandscape = !isLandscape
-                                isLandscape = nextLandscape
-                                activity?.requestedOrientation = if (nextLandscape) {
-                                    ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                                } else {
-                                    ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-                                }
-                                lastInteractionMs = System.currentTimeMillis()
-                            },
-                            modifier = Modifier.testTag("player_rotate_button")
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.45f))
+                                .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.20f)), CircleShape)
+                                .bouncyClickable(scaleDown = 0.88f, onClick = {
+                                    val nextLandscape = !isLandscape
+                                    isLandscape = nextLandscape
+                                    activity?.requestedOrientation = if (nextLandscape) {
+                                        ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                                    } else {
+                                        ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                                    }
+                                    lastInteractionMs = System.currentTimeMillis()
+                                })
+                                .testTag("player_rotate_button"),
+                            contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.ScreenRotation,
                                 contentDescription = "Rotate screen",
-                                tint = Color.White
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
 
-                        IconButton(
-                            onClick = {
-                                isScreenLocked = true
-                                controlsVisible = false
-                                showUnlockButton = true
-                            },
-                            modifier = Modifier.testTag("player_lock_button")
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.45f))
+                                .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.20f)), CircleShape)
+                                .bouncyClickable(scaleDown = 0.88f, onClick = {
+                                    isScreenLocked = true
+                                    controlsVisible = false
+                                    showUnlockButton = true
+                                })
+                                .testTag("player_lock_button"),
+                            contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Lock,
                                 contentDescription = "Lock screen",
-                                tint = Color.White
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
                             )
-                        }
-
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable {
-                                    lastInteractionMs = System.currentTimeMillis()
-                                    exoController.cycleAspectMode()
-                                }
-                                .testTag("player_aspect_mode_button")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    Icons.Rounded.AspectRatio,
-                                    contentDescription = "Aspect ratio",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = when (uiState.aspectMode) {
-                                        AspectMode.FIT -> "Fit"
-                                        AspectMode.ZOOM -> "Fill"
-                                        AspectMode.STRETCH -> "Stretch"
-                                    },
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
                         }
                     }
                 }
 
-                // Center Transport Controls (minimalist, borderless, spaced widely)
+                // Center Transport Controls (tactile frosted circular buttons with spring bounce)
                 Row(
                     modifier = Modifier.align(Alignment.Center),
-                    horizontalArrangement = Arrangement.spacedBy(80.dp),
+                    horizontalArrangement = Arrangement.spacedBy(48.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(
-                        onClick = {
-                            lastInteractionMs = System.currentTimeMillis()
-                            exoController.seekBy(-10_000L)
-                        },
-                        modifier = Modifier.size(56.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.45f))
+                            .border(BorderStroke(1.2.dp, Color.White.copy(alpha = 0.22f)), CircleShape)
+                            .bouncyClickable(scaleDown = 0.86f, onClick = {
+                                lastInteractionMs = System.currentTimeMillis()
+                                exoController.seekBy(-10_000L)
+                            }),
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             Icons.Rounded.Replay10,
                             contentDescription = "Rewind 10 seconds",
                             tint = Color.White,
-                            modifier = Modifier.size(44.dp)
+                            modifier = Modifier.size(34.dp)
                         )
                     }
 
-                    Surface(
-                        color = Color.Transparent,
-                        shape = CircleShape,
+                    Box(
                         modifier = Modifier
-                            .size(68.dp)
+                            .size(76.dp)
                             .clip(CircleShape)
-                            .clickable {
+                            .background(Color.White.copy(alpha = 0.20f))
+                            .border(BorderStroke(2.dp, Color.White.copy(alpha = 0.45f)), CircleShape)
+                            .bouncyClickable(scaleDown = 0.85f, onClick = {
                                 lastInteractionMs = System.currentTimeMillis()
                                 exoController.togglePlayPause()
-                            }
-                            .testTag("player_play_pause_button")
+                            })
+                            .testTag("player_play_pause_button"),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = if (uiState.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                                contentDescription = if (uiState.isPlaying) "Pause" else "Play",
-                                tint = Color.White,
-                                modifier = Modifier.size(60.dp)
-                            )
-                        }
+                        Icon(
+                            imageVector = if (uiState.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                            contentDescription = if (uiState.isPlaying) "Pause" else "Play",
+                            tint = Color.White,
+                            modifier = Modifier.size(46.dp)
+                        )
                     }
 
-                    IconButton(
-                        onClick = {
-                            lastInteractionMs = System.currentTimeMillis()
-                            exoController.seekBy(10_000L)
-                        },
-                        modifier = Modifier.size(56.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.45f))
+                            .border(BorderStroke(1.2.dp, Color.White.copy(alpha = 0.22f)), CircleShape)
+                            .bouncyClickable(scaleDown = 0.86f, onClick = {
+                                lastInteractionMs = System.currentTimeMillis()
+                                exoController.seekBy(10_000L)
+                            }),
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             Icons.Rounded.Forward10,
                             contentDescription = "Forward 10 seconds",
                             tint = Color.White,
-                            modifier = Modifier.size(44.dp)
+                            modifier = Modifier.size(34.dp)
                         )
                     }
                 }
@@ -1214,20 +1251,21 @@ fun PlayerScreen(
                             color = Color.White
                         )
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                             Surface(
-                                color = Color.White.copy(alpha = 0.14f),
-                                shape = RoundedCornerShape(10.dp),
+                                color = Color.White.copy(alpha = 0.16f),
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.20f)),
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .clickable {
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .bouncyClickable(scaleDown = 0.90f) {
                                         lastInteractionMs = System.currentTimeMillis()
                                         showSourcesSheet = true
                                     }
                                     .testTag("player_sources_button")
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
@@ -1236,57 +1274,84 @@ fun PlayerScreen(
                                         tint = Color.White,
                                         modifier = Modifier.size(16.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = if (availableSources.size > 1) "Sources (${availableSources.size})" else "Source",
-                                        style = MaterialTheme.typography.labelMedium,
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
                                         color = Color.White
                                     )
                                 }
                             }
 
-                            IconButton(
-                                onClick = {
-                                    lastInteractionMs = System.currentTimeMillis()
-                                    showSubtitleSheet = true
-                                },
-                                modifier = Modifier.testTag("player_subtitles_button")
-                            ) {
-                                Icon(Icons.Rounded.Subtitles, contentDescription = "Subtitles", tint = Color.White)
-                            }
-                            IconButton(
-                                onClick = {
-                                    lastInteractionMs = System.currentTimeMillis()
-                                    showAudioSheet = true
-                                },
-                                modifier = Modifier.testTag("player_audio_button")
-                            ) {
-                                Icon(Icons.Rounded.AudioFile, contentDescription = "Audio tracks", tint = Color.White)
-                            }
-                            IconButton(
-                                onClick = {
-                                    lastInteractionMs = System.currentTimeMillis()
-                                    showSpeedSheet = true
-                                }
-                            ) {
-                                Icon(Icons.Rounded.Speed, contentDescription = "Playback speed", tint = Color.White)
-                            }
-                            IconButton(
-                                onClick = {
-                                    lastInteractionMs = System.currentTimeMillis()
-                                    exoController.cycleAspectMode()
-                                    val nextLabel = when (uiState.aspectMode) {
-                                        AspectMode.FIT -> "Zoom (Fill)"
-                                        AspectMode.ZOOM -> "Stretch"
-                                        AspectMode.STRETCH -> "Fit"
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.12f))
+                                    .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)), CircleShape)
+                                    .bouncyClickable(scaleDown = 0.88f) {
+                                        lastInteractionMs = System.currentTimeMillis()
+                                        showSubtitleSheet = true
                                     }
-                                    activeOverlayIcon = Icons.Rounded.AspectRatio
-                                    activeOverlayProgress = null
-                                    activeOverlayHud = "Aspect: $nextLabel"
-                                    hudToken++
-                                }
+                                    .testTag("player_subtitles_button"),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Rounded.AspectRatio, contentDescription = "Aspect ratio", tint = Color.White)
+                                Icon(Icons.Rounded.Subtitles, contentDescription = "Subtitles", tint = Color.White, modifier = Modifier.size(19.dp))
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.12f))
+                                    .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)), CircleShape)
+                                    .bouncyClickable(scaleDown = 0.88f) {
+                                        lastInteractionMs = System.currentTimeMillis()
+                                        showAudioSheet = true
+                                    }
+                                    .testTag("player_audio_button"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Rounded.AudioFile, contentDescription = "Audio tracks", tint = Color.White, modifier = Modifier.size(19.dp))
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.12f))
+                                    .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)), CircleShape)
+                                    .bouncyClickable(scaleDown = 0.88f) {
+                                        lastInteractionMs = System.currentTimeMillis()
+                                        showSpeedSheet = true
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Rounded.Speed, contentDescription = "Playback speed", tint = Color.White, modifier = Modifier.size(19.dp))
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.12f))
+                                    .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)), CircleShape)
+                                    .bouncyClickable(scaleDown = 0.88f) {
+                                        lastInteractionMs = System.currentTimeMillis()
+                                        exoController.cycleAspectMode()
+                                        val nextLabel = when (uiState.aspectMode) {
+                                            AspectMode.FIT -> "Zoom (Fill)"
+                                            AspectMode.ZOOM -> "Stretch"
+                                            AspectMode.STRETCH -> "Fit"
+                                        }
+                                        activeOverlayIcon = Icons.Rounded.AspectRatio
+                                        activeOverlayProgress = null
+                                        activeOverlayHud = "Aspect: $nextLabel"
+                                        hudToken++
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Rounded.AspectRatio, contentDescription = "Aspect ratio", tint = Color.White, modifier = Modifier.size(19.dp))
                             }
                         }
                     }
@@ -1296,7 +1361,7 @@ fun PlayerScreen(
 
         // Skip Intro Pill Button (visible independently during intro window)
         AnimatedVisibility(
-            visible = showSkipIntro,
+            visible = showSkipIntro && !isPipMode,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier
@@ -1321,7 +1386,7 @@ fun PlayerScreen(
 
         // Series Season & Episode Selector Dropdown Popover
         AnimatedVisibility(
-            visible = showEpisodeDropdown && isSeries && seriesEpisodes.isNotEmpty(),
+            visible = showEpisodeDropdown && isSeries && seriesEpisodes.isNotEmpty() && !isPipMode,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier
@@ -1527,7 +1592,7 @@ fun PlayerScreen(
 
         // Up Next Floating Card (Series Only — final 20s or onEnded countdown)
         AnimatedVisibility(
-            visible = showUpNextCard,
+            visible = showUpNextCard && !isPipMode,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier
@@ -1673,9 +1738,17 @@ fun PlayerScreen(
     if (showAudioSheet) {
         AudioTrackSheet(
             tracks = uiState.audioTracks,
+            volumeBoost = uiState.volumeBoost,
+            nightModeActive = uiState.nightModeActive,
             onSelect = { id ->
                 exoController.selectAudioTrack(id)
                 showAudioSheet = false
+            },
+            onVolumeBoostChange = { boost ->
+                exoController.setVolumeMultiplier(boost)
+            },
+            onNightModeToggle = { enabled ->
+                exoController.toggleNightMode(enabled)
             },
             onDismiss = { showAudioSheet = false }
         )
@@ -2087,7 +2160,11 @@ private fun SubtitleStudioSheet(
 @Composable
 fun AudioTrackSheet(
     tracks: List<com.example.player.PlayerTrackInfo>,
+    volumeBoost: Float = 1.0f,
+    nightModeActive: Boolean = false,
     onSelect: (String) -> Unit,
+    onVolumeBoostChange: (Float) -> Unit = {},
+    onNightModeToggle: (Boolean) -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val activeGreen = Color(0xFF22C55E)
@@ -2096,9 +2173,73 @@ fun AudioTrackSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Audio Tracks", style = MaterialTheme.typography.titleLarge)
+            Text("Audio Settings & Tracks", style = MaterialTheme.typography.titleLarge)
+
+            // Audio Boost & Night Mode enhancements
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Night Mode (Dialogue Clarity)",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                                color = Color.White
+                            )
+                            Text(
+                                "Evens out loud dynamic spikes for clear speech",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = nightModeActive,
+                            onCheckedChange = onNightModeToggle
+                        )
+                    }
+
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+
+                    Text(
+                        "Volume Boost (${(volumeBoost * 100).roundToInt()}%)",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = Color.White
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(1.0f to "100%", 1.25f to "125%", 1.5f to "150%", 2.0f to "200%").forEach { (boost, label) ->
+                            val isSelected = abs(volumeBoost - boost) < 0.05f
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { onVolumeBoostChange(boost) },
+                                label = { Text(label) }
+                            )
+                        }
+                    }
+                }
+            }
+
+            Text(
+                "Audio Tracks",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
             if (tracks.isEmpty()) {
                 Text(
                     text = "Default stream audio active.",
@@ -2109,7 +2250,7 @@ fun AudioTrackSheet(
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 320.dp)
+                        .heightIn(max = 280.dp)
                         .testTag("audio_tracks_list"),
                     contentPadding = PaddingValues(bottom = 32.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)

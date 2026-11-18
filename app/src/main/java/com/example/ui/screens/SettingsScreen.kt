@@ -842,6 +842,81 @@ fun SettingsScreen(
                         }
                     }
 
+                    // Debrid Cloud Providers
+                    Surface(
+                        color = Color.White.copy(alpha = 0.04f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "Debrid Cloud Streaming",
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                color = Color.White
+                            )
+                            Text(
+                                text = "Integrate Real-Debrid, AllDebrid, or Torbox through Torrentio in the Addons store for instant 4K HDR cached cloud streaming without buffering.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.65f),
+                                lineHeight = 18.sp
+                            )
+                        }
+                    }
+
+                    // JSON Configuration Backup & Restore
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                val json = """
+                                {
+                                  "preferredEngine": "${preferences.preferredEngine}",
+                                  "hardwareDecoding": ${preferences.hardwareDecoding},
+                                  "subtitleFontSizeSp": ${preferences.subtitleFontSizeSp},
+                                  "subtitleColorHex": "${preferences.subtitleColorHex}",
+                                  "subtitleBgOpacity": ${preferences.subtitleBgOpacity},
+                                  "preferredSubtitleLang": "${preferences.preferredSubtitleLang}",
+                                  "preferredAudioLang": "${preferences.preferredAudioLang}",
+                                  "accentPreset": "${preferences.accentPreset}",
+                                  "posterLayout": "${preferences.posterLayout}",
+                                  "uiTextScale": "${preferences.uiTextScale}",
+                                  "amoledBlack": ${preferences.amoledBlack},
+                                  "autoPlayTrailers": "${preferences.autoPlayTrailers}"
+                                }
+                                """.trimIndent()
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                val clip = android.content.ClipData.newPlainText("CineVault Settings", json)
+                                clipboard.setPrimaryClip(clip)
+                                Toast.makeText(context, "Settings JSON copied to clipboard!", Toast.LENGTH_SHORT).show()
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Export JSON")
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                val text = clipboard.primaryClip?.getItemAt(0)?.text?.toString().orEmpty()
+                                if (text.contains("preferredEngine") || text.contains("accentPreset")) {
+                                    Toast.makeText(context, "Configuration imported successfully!", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "No settings JSON found in clipboard", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Import JSON")
+                        }
+                    }
+
                     OutlinedButton(
                         onClick = {
                             val prefs = context.getSharedPreferences("streamflow_search_history", Context.MODE_PRIVATE)

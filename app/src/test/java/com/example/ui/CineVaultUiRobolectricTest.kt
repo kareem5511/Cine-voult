@@ -777,6 +777,96 @@ class CineVaultUiRobolectricTest {
         composeRule.onNodeWithTag("audio_track_row_aud_6").assertIsDisplayed().performClick()
         assertEquals("aud_6", selectedId)
     }
+
+    @Test
+    fun mediaDetailScreen_displaysRelatedMediaCarouselAndHandlesSelection() {
+        var selectedItem: StremioMetaPreview? = null
+        val relatedPreview = StremioMetaPreview(
+            id = "tt_rel_999",
+            type = "movie",
+            name = "Interstellar Echo",
+            releaseInfo = "2024",
+            imdbRating = "8.6"
+        )
+        composeRule.setContent {
+            CineVaultTheme {
+                MediaDetailScreen(
+                    detailState = MediaDetailUiState(
+                        isLoading = false,
+                        preview = StremioMetaPreview(id = "tt_orig_1", type = "movie", name = "Original Film"),
+                        relatedItems = listOf(relatedPreview)
+                    ),
+                    isFavorited = false,
+                    preferredEngine = PlaybackEngine.NEXTPLAYER,
+                    onBack = {},
+                    onToggleFavorite = {},
+                    onPlayStream = { _, _ -> },
+                    onDownloadStream = {},
+                    onSelectRelatedMedia = { selectedItem = it },
+                    isModal = true
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("media_detail_list").performScrollToNode(hasTestTag("detail_related_media_row"))
+        composeRule.onNodeWithTag("detail_related_media_row").assertIsDisplayed()
+        composeRule.onNodeWithText("Related Movies", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Interstellar Echo", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("related_card_tt_rel_999").performClick()
+        assertEquals("tt_rel_999", selectedItem?.id)
+    }
+
+    @Test
+    fun audioTrackSheet_displaysVolumeBoostAndNightModeToggle() {
+        var boostSet = 1.0f
+        var nightModeSet = false
+        composeRule.setContent {
+            CineVaultTheme {
+                AudioTrackSheet(
+                    tracks = emptyList(),
+                    volumeBoost = 1.0f,
+                    nightModeActive = false,
+                    onSelect = {},
+                    onVolumeBoostChange = { boostSet = it },
+                    onNightModeToggle = { nightModeSet = it },
+                    onDismiss = {}
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("Night Mode (Dialogue Clarity)").assertIsDisplayed()
+        composeRule.onNodeWithText("Volume Boost (100%)").assertIsDisplayed()
+        composeRule.onNodeWithText("150%").assertIsDisplayed().performClick()
+        assertEquals(1.5f, boostSet)
+    }
+
+    @Test
+    fun playerScreen_topAspectModeButtonIsRemoved() {
+        composeRule.setContent {
+            CineVaultTheme {
+                PlayerScreen(
+                    request = PlaybackRequest(
+                        mediaKey = "tt_movie_top_hud_test",
+                        title = "Top HUD Test",
+                        mediaType = "movie",
+                        streamUrl = "https://cdn.example.com/test.mp4",
+                        imdbId = "tt_movie_top_hud_test"
+                    ),
+                    subtitles = emptyList(),
+                    preferences = UserPreferences(userId = "test_user"),
+                    onUpdateProgress = { _, _, _, _, _, _, _ -> },
+                    onUpdateSubtitleDelay = {},
+                    onClose = {}
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        // Top aspect mode button must NOT exist anywhere in the hierarchy
+        assertEquals(0, composeRule.onAllNodesWithTag("player_aspect_mode_button").fetchSemanticsNodes().size)
+    }
 }
 
 

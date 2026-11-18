@@ -114,7 +114,8 @@ fun MediaDetailScreen(
     savedPositionMs: Long = 0L,
     isModal: Boolean = false,
     downloads: List<OfflineDownloadEntity> = emptyList(),
-    onNavigateToOffline: () -> Unit = {}
+    onNavigateToOffline: () -> Unit = {},
+    onSelectRelatedMedia: (StremioMetaPreview) -> Unit = {}
 ) {
     BackHandler(onBack = onBack)
 
@@ -724,6 +725,45 @@ fun MediaDetailScreen(
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
+                        }
+                    }
+
+                    // Related Movies / Related Series Carousel (More Like This)
+                    val isSeriesMedia = preview.type.equals("series", ignoreCase = true)
+                    val sectionTitle = if (isSeriesMedia) "Related Series" else "Related Movies"
+                    if (detailState.relatedItems.isNotEmpty()) {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.padding(top = 14.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = sectionTitle,
+                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "More Like This",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.testTag("detail_related_media_row")
+                            ) {
+                                items(detailState.relatedItems, key = { it.id }) { item ->
+                                    RelatedPosterCard(
+                                        item = item,
+                                        onClick = { onSelectRelatedMedia(item) }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -1558,5 +1598,89 @@ private fun parseStreamSizeBytes(stream: StremioStream): Long {
         (num * 1024 * 1024 * 1024).toLong()
     } else {
         (num * 1024 * 1024).toLong()
+    }
+}
+
+@Composable
+private fun RelatedPosterCard(
+    item: StremioMetaPreview,
+    onClick: () -> Unit
+) {
+    val cardShape = RoundedCornerShape(12.dp)
+    Column(
+        modifier = Modifier
+            .width(120.dp)
+            .clip(cardShape)
+            .clickable(onClick = onClick)
+            .testTag("related_card_${item.id}"),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .width(120.dp)
+                .height(175.dp)
+                .clip(cardShape)
+                .background(Color.White.copy(alpha = 0.08f))
+        ) {
+            if (!item.poster.isNullOrBlank()) {
+                AsyncImage(
+                    model = item.poster,
+                    contentDescription = item.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Rounded.Movie,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.35f),
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+            }
+
+            if (!item.imdbRating.isNullOrBlank()) {
+                Surface(
+                    color = Color.Black.copy(alpha = 0.75f),
+                    shape = RoundedCornerShape(bottomEnd = 8.dp),
+                    modifier = Modifier.align(Alignment.TopStart)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Star,
+                            contentDescription = null,
+                            tint = Color(0xFFFFC107),
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = item.imdbRating.orEmpty(),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+        }
+
+        Text(
+            text = item.name,
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        if (!item.releaseInfo.isNullOrBlank()) {
+            Text(
+                text = item.releaseInfo.orEmpty(),
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White.copy(alpha = 0.65f),
+                maxLines = 1
+            )
+        }
     }
 }

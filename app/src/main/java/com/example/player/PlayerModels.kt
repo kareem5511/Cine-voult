@@ -99,8 +99,12 @@ data class ActivePlaybackState(
     val subtitleTracks: List<PlayerTrackInfo> = emptyList(),
     val activeSubtitleDelayMs: Int = 0,
     val errorMessage: String? = null,
-    val hardwareDecodingActive: Boolean = true
+    val hardwareDecodingActive: Boolean = true,
+    val volumeBoost: Float = 1.0f,
+    val nightModeActive: Boolean = false
 )
+
+val LocalPipMode = androidx.compose.runtime.staticCompositionLocalOf { false }
 
 object LanguageCodeMatcher {
     private val aliases: Map<String, Set<String>> = mapOf(

@@ -306,6 +306,21 @@ class ExoPlayerController(private val context: Context) {
         _state.update { it.copy(playbackSpeed = speed) }
     }
 
+    fun setVolumeMultiplier(multiplier: Float) {
+        val clamped = multiplier.coerceIn(0.5f, 2.0f)
+        _state.update { it.copy(volumeBoost = clamped) }
+        player?.volume = clamped
+    }
+
+    fun toggleNightMode(enabled: Boolean) {
+        _state.update { it.copy(nightModeActive = enabled) }
+        if (enabled) {
+            player?.volume = (_state.value.volumeBoost * 0.85f).coerceIn(0.2f, 1.5f)
+        } else {
+            player?.volume = _state.value.volumeBoost
+        }
+    }
+
     fun cycleAspectMode() {
         val next = when (_state.value.aspectMode) {
             AspectMode.FIT -> AspectMode.ZOOM

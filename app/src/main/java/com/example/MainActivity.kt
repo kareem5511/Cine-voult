@@ -1,8 +1,12 @@
 package com.example
 
 import android.app.Activity
+import android.app.PictureInPictureParams
 import android.content.Context
+import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
+import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -128,6 +132,7 @@ import com.example.data.repository.CineVaultSyncPort
 import com.example.data.repository.FirestoreSyncRepository
 import com.example.data.repository.LocalRoomSyncRepository
 import com.example.data.stremio.StremioUrlHelper
+import com.example.player.LocalPipMode
 import com.example.player.PlaybackRequest
 import com.example.player.StreamSourceOption
 import com.example.ui.screens.AddonsScreen
@@ -181,17 +186,47 @@ private data class TopNavItem<T : Any>(
 )
 
 class MainActivity : ComponentActivity() {
+    private val isPipModeState = mutableStateOf(false)
+    private var isPlayerActive = false
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (isPlayerActive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                val params = PictureInPictureParams.Builder()
+                    .setAspectRatio(Rational(16, 9))
+                    .build()
+                enterPictureInPictureMode(params)
+            } catch (_: Exception) {}
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        isPipModeState.value = isInPictureInPictureMode
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            CineVaultAppRoot()
+            CompositionLocalProvider(LocalPipMode provides isPipModeState.value) {
+                CineVaultAppRoot(
+                    onPlayerStateChanged = { active -> isPlayerActive = active }
+                )
+            }
         }
     }
 }
 
 @Composable
-fun CineVaultAppRoot(auth: FirebaseAuth = Firebase.auth) {
+fun CineVaultAppRoot(
+    auth: FirebaseAuth = Firebase.auth,
+    onPlayerStateChanged: (Boolean) -> Unit = {}
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val localPrefs = remember(context) { LocalPreferencesStore(context.applicationContext) }
@@ -216,7 +251,8 @@ fun CineVaultAppRoot(auth: FirebaseAuth = Firebase.auth) {
                     },
                     onClearGuestMode = {
                         scope.launch { localPrefs.setGuestModeSkipped(false) }
-                    }
+                    },
+                    onPlayerStateChanged = onPlayerStateChanged
                 )
             }
         }
@@ -229,7 +265,8 @@ fun CineVaultAppRoot(auth: FirebaseAuth = Firebase.auth) {
                     syncRepoFactory = { appCtx -> LocalRoomSyncRepository(appCtx) },
                     onClearGuestMode = {
                         scope.launch { localPrefs.setGuestModeSkipped(false) }
-                    }
+                    },
+                    onPlayerStateChanged = onPlayerStateChanged
                 )
             }
         }
@@ -264,7 +301,8 @@ private fun CineVaultShell(
     userEmail: String?,
     isGuestMode: Boolean,
     syncRepoFactory: (Context) -> CineVaultSyncPort,
-    onClearGuestMode: () -> Unit
+    onClearGuestMode: () -> Unit,
+    onPlayerStateChanged: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -341,7 +379,12 @@ private fun CineVaultShell(
     val currentDest = navBackStackEntry?.destination
     val isPlayerActive = currentDest?.hasRoute<PlayerRoute>() == true
     val isFullScreenRoute = isPlayerActive || currentDest?.hasRoute<DetailRoute>() == true
+    val isPipMode = LocalPipMode.current
     var showTitleDetailModal by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isPlayerActive) {
+        onPlayerStateChanged(isPlayerActive)
+    }
 
     androidx.activity.compose.BackHandler(enabled = showTitleDetailModal) {
         showTitleDetailModal = false
@@ -648,7 +691,8 @@ private fun CineVaultShell(
                                             launchSingleTop = true
                                             restoreState = true
                                         }
-                                    }
+                                    },
+                                    onSelectRelatedMedia = { rel -> viewModel.loadMediaDetail(rel) }
                                 )
                             }
 
@@ -743,7 +787,7 @@ private fun CineVaultShell(
             }
 
             // Centered Floating Frosted-Glass Pill Dock & bottom edge scrim
-            if (!isFullScreenRoute && !useRail) {
+            if (!isFullScreenRoute && !useRail && !isPipMode) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -836,7 +880,8 @@ private fun CineVaultShell(
                                 launchSingleTop = true
                                 restoreState = true
                             }
-                        }
+                        },
+                        onSelectRelatedMedia = { rel -> viewModel.loadMediaDetail(rel) }
                     )
                 }
             }

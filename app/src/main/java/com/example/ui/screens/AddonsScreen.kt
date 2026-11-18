@@ -85,6 +85,14 @@ import com.example.ui.theme.AmoledCard
 import com.example.ui.theme.machinedCardBorder
 import com.example.ui.viewmodel.UiState
 
+data class CommunityAddonEntry(
+    val name: String,
+    val category: String,
+    val description: String,
+    val manifestUrl: String,
+    val configUrl: String? = null
+)
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AddonsScreen(
@@ -289,6 +297,207 @@ fun AddonsScreen(
                             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
                             shape = RoundedCornerShape(8.dp)
                         )
+                    }
+                }
+            }
+        }
+
+        // Curated Community Addons Directory Card
+        item {
+            val installedUrls = (addonsState as? UiState.Success)?.data?.map { it.manifestUrl.lowercase().trimEnd('/') }.orEmpty().toSet()
+            val communityAddons = listOf(
+                CommunityAddonEntry(
+                    name = "Torrentio",
+                    category = "Streams & Torrents",
+                    description = "Torrent streams with multi-provider scrapers and Debrid support",
+                    manifestUrl = "https://torrentio.strem.fun/manifest.json",
+                    configUrl = "https://torrentio.strem.fun/configure"
+                ),
+                CommunityAddonEntry(
+                    name = "CyberFlix Catalogs",
+                    category = "Catalog",
+                    description = "Browse Netflix, Disney+, Apple TV+, HBO Max and other provider feeds",
+                    manifestUrl = "https://cyberflix.kamy.me/manifest.json",
+                    configUrl = "https://cyberflix.kamy.me/configure"
+                ),
+                CommunityAddonEntry(
+                    name = "Anime Kitsu",
+                    category = "Anime",
+                    description = "Extensive anime series catalog, trending lists, and Kitsu metadata",
+                    manifestUrl = "https://anime-kitsu.strem.fun/manifest.json",
+                    configUrl = null
+                ),
+                CommunityAddonEntry(
+                    name = "OpenSubtitles v3",
+                    category = "Subtitles",
+                    description = "Multi-language synchronized subtitle tracks for all movie & series releases",
+                    manifestUrl = StremioUrlHelper.DEFAULT_OPENSUBTITLES_MANIFEST,
+                    configUrl = null
+                ),
+                CommunityAddonEntry(
+                    name = "YouTube",
+                    category = "Video & Media",
+                    description = "Stream popular YouTube channels, trailers, podcasts, and clips directly in CineVault",
+                    manifestUrl = "https://youtube.strem.fun/manifest.json",
+                    configUrl = null
+                )
+            )
+
+            var isCommunityStoreExpanded by remember { mutableStateOf(true) }
+            val storeShape = RoundedCornerShape(18.dp)
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = AmoledCard),
+                shape = storeShape,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .machinedCardBorder(shape = storeShape, cornerRadiusDp = 18.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { isCommunityStoreExpanded = !isCommunityStoreExpanded },
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Explore Community Addons",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = Color.White
+                            )
+                            Text(
+                                text = "1-tap verified Stremio community extensions",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.55f)
+                            )
+                        }
+                        IconButton(onClick = { isCommunityStoreExpanded = !isCommunityStoreExpanded }) {
+                            Icon(
+                                imageVector = if (isCommunityStoreExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                                contentDescription = null,
+                                tint = Color.White
+                            )
+                        }
+                    }
+
+                    AnimatedVisibility(visible = isCommunityStoreExpanded) {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            val context = LocalContext.current
+                            communityAddons.forEach { entry ->
+                                val isInstalled = installedUrls.contains(entry.manifestUrl.lowercase().trimEnd('/'))
+                                Surface(
+                                    color = Color.White.copy(alpha = 0.04f),
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Text(
+                                                    text = entry.name,
+                                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                                    color = Color.White
+                                                )
+                                                Surface(
+                                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                                    shape = RoundedCornerShape(6.dp)
+                                                ) {
+                                                    Text(
+                                                        text = entry.category,
+                                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                                        color = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
+                                            Text(
+                                                text = entry.description,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = Color.White.copy(alpha = 0.65f),
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.padding(top = 2.dp)
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.width(8.dp))
+
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            if (entry.configUrl != null) {
+                                                IconButton(
+                                                    onClick = {
+                                                        runCatching {
+                                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(entry.configUrl)))
+                                                        }
+                                                    },
+                                                    modifier = Modifier.size(34.dp)
+                                                ) {
+                                                    Icon(
+                                                        Icons.Rounded.Settings,
+                                                        contentDescription = "Configure ${entry.name}",
+                                                        tint = Color.White.copy(alpha = 0.75f),
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
+                                            }
+
+                                            if (isInstalled) {
+                                                Surface(
+                                                    color = Color(0xFF22C55E).copy(alpha = 0.16f),
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    border = BorderStroke(1.dp, Color(0xFF22C55E))
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                    ) {
+                                                        Icon(
+                                                            Icons.Rounded.CloudDone,
+                                                            contentDescription = null,
+                                                            tint = Color(0xFF22C55E),
+                                                            modifier = Modifier.size(14.dp)
+                                                        )
+                                                        Text(
+                                                            "Active",
+                                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                            color = Color(0xFF22C55E)
+                                                        )
+                                                    }
+                                                }
+                                            } else {
+                                                Button(
+                                                    onClick = { onInstallAddon(entry.manifestUrl) },
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                                    modifier = Modifier.height(34.dp)
+                                                ) {
+                                                    Text("Install", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

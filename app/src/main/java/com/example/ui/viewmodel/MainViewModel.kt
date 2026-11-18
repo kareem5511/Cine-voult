@@ -81,6 +81,7 @@ data class MediaDetailUiState(
     val streams: List<StremioStream> = emptyList(),
     val streamAddonMap: Map<String, Pair<String, String>> = emptyMap(),
     val subtitles: List<StremioSubtitle> = emptyList(),
+    val relatedItems: List<StremioMetaPreview> = emptyList(),
     val error: String? = null
 )
 
@@ -581,6 +582,18 @@ class CineVaultViewModel(
                 mediaId = streamTargetId
             )
 
+            val allCatalogItems = _discoverFeedState.value.flatMap { it.items }
+            val currentGenres = (resolvedDetail?.genres ?: preview.genres).toSet()
+            val related = allCatalogItems
+                .filter { it.id != preview.id && (it.type.equals(preview.type, ignoreCase = true) || preview.type.isBlank()) }
+                .distinctBy { it.id }
+                .sortedByDescending { item ->
+                    val sharedGenreCount = item.genres.count { it in currentGenres }
+                    val hasRating = item.imdbRating?.toDoubleOrNull() ?: 0.0
+                    (sharedGenreCount * 10.0) + hasRating
+                }
+                .take(15)
+
             _detailState.value = MediaDetailUiState(
                 isLoading = false,
                 preview = preview,
@@ -591,7 +604,8 @@ class CineVaultViewModel(
                     val url = stream.url ?: return@mapNotNull null
                     url to (addon.addonKey to addon.name)
                 }.toMap(),
-                subtitles = subList
+                subtitles = subList,
+                relatedItems = related
             )
         }
     }
