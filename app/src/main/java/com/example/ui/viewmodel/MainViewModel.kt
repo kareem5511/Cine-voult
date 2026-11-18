@@ -913,6 +913,39 @@ class CineVaultViewModel(
         }
     }
 
+    fun markAsWatched(mediaKey: String) {
+        viewModelScope.launch {
+            val sanitizedKey = StremioUrlHelper.sanitizeDocId(mediaKey)
+            val existing = syncRepository.getLibraryItem(sanitizedKey).getOrNull()
+            if (existing != null) {
+                val updated = existing.copy(
+                    watchProgressMs = 0L,
+                    lastWatchedAtMs = System.currentTimeMillis()
+                )
+                syncRepository.upsertLibraryItem(updated)
+                _statusBanner.value = "Marked as watched"
+            }
+        }
+    }
+
+    fun removeContinueWatching(mediaKey: String) {
+        viewModelScope.launch {
+            val sanitizedKey = StremioUrlHelper.sanitizeDocId(mediaKey)
+            val existing = syncRepository.getLibraryItem(sanitizedKey).getOrNull()
+            if (existing != null) {
+                if (existing.isFavorite) {
+                    val updated = existing.copy(watchProgressMs = 0L)
+                    syncRepository.upsertLibraryItem(updated)
+                } else {
+                    syncRepository.deleteLibraryItem(sanitizedKey)
+                }
+                _statusBanner.value = "Removed from Continue Watching"
+            } else {
+                syncRepository.deleteLibraryItem(sanitizedKey)
+            }
+        }
+    }
+
     fun saveWatchProgress(
         mediaKey: String,
         title: String,

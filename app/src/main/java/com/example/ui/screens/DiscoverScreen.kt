@@ -56,12 +56,25 @@ import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.DashboardCustomize
 import androidx.compose.material.icons.rounded.LocalMovies
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.example.ui.theme.AmoledCard
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -151,6 +164,9 @@ fun DiscoverScreen(
     onRefresh: () -> Unit,
     onSelectMedia: (StremioMetaPreview) -> Unit,
     onResumeItem: (LibraryMediaItem) -> Unit = {},
+    onRestartItem: (LibraryMediaItem) -> Unit = {},
+    onMarkAsWatched: (LibraryMediaItem) -> Unit = {},
+    onRemoveContinueWatching: (LibraryMediaItem) -> Unit = {},
     onQuickFavorite: (StremioMetaPreview) -> Unit,
     onSelectCatalogGenre: (sectionKey: String, genre: String?) -> Unit = { _, _ -> },
     onLoadMoreCatalog: (sectionKey: String) -> Unit = {},
@@ -162,6 +178,7 @@ fun DiscoverScreen(
     var showCustomizeSheet by remember { mutableStateOf(false) }
     var activeBrowseSectionKey by remember { mutableStateOf<String?>(null) }
     var searchExpanded by remember { mutableStateOf(false) }
+    var selectedCwItemForOptions by remember { mutableStateOf<LibraryMediaItem?>(null) }
     val listState = rememberLazyListState()
     val isHeroInView by remember {
         derivedStateOf { listState.firstVisibleItemIndex == 0 }
@@ -302,14 +319,27 @@ fun DiscoverScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(availableTypes, key = { it.first }) { (key, label) ->
+                            val isSelected = discoverState.selectedType == key
                             FilterChip(
-                                selected = discoverState.selectedType == key,
+                                selected = isSelected,
                                 onClick = { onTypeSelected(key) },
-                                label = { Text(label) },
+                                label = {
+                                    Text(
+                                        text = label,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                    )
+                                },
                                 colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    containerColor = Color(0xFF161616),
+                                    labelColor = Color.White.copy(alpha = 0.80f),
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
                                     selectedLabelColor = MaterialTheme.colorScheme.primary
                                 ),
+                                border = BorderStroke(
+                                    width = 1.dp,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.12f)
+                                ),
+                                shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.testTag("filter_chip_$key")
                             )
                         }
@@ -398,7 +428,8 @@ fun DiscoverScreen(
                         items(continueWatching, key = { "cw_${it.mediaKey}" }) { item ->
                             ContinueWatchingCard(
                                 item = item,
-                                onClick = { onResumeItem(item) }
+                                onClick = { onResumeItem(item) },
+                                onLongClick = { selectedCwItemForOptions = item }
                             )
                         }
                     }
@@ -582,6 +613,30 @@ fun DiscoverScreen(
         )
     }
 
+    if (selectedCwItemForOptions != null) {
+        ContinueWatchingOptionsDialog(
+            item = selectedCwItemForOptions!!,
+            onDismiss = { selectedCwItemForOptions = null },
+            onGoToDetails = { item ->
+                onSelectMedia(
+                    StremioMetaPreview(
+                        id = item.mediaKey,
+                        type = if (item.mediaType.contains("series", ignoreCase = true)) "series" else "movie",
+                        name = item.title,
+                        poster = item.posterUrl.ifBlank { null },
+                        background = item.backdropUrl.ifBlank { null },
+                        description = item.overview.ifBlank { null },
+                        releaseInfo = item.year.ifBlank { null },
+                        imdbRating = item.imdbRating.ifBlank { null }
+                    )
+                )
+            },
+            onStartFromBeginning = onRestartItem,
+            onMarkAsWatched = onMarkAsWatched,
+            onRemove = onRemoveContinueWatching
+        )
+    }
+
     val activeBrowseSection = activeBrowseSectionKey?.let { key ->
         discoverState.sections.firstOrNull { it.sectionKey == key }
     }
@@ -674,6 +729,8 @@ private fun FeaturedHeroCarousel(
 
     val bgColor = MaterialTheme.colorScheme.background
     val accentGlow = MaterialTheme.colorScheme.primary
+    val configuration = LocalConfiguration.current
+    val heroHeight = (configuration.screenHeightDp * 0.74f).dp.coerceIn(540.dp, 680.dp)
 
     Box(
         modifier = Modifier
@@ -709,7 +766,7 @@ private fun FeaturedHeroCarousel(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(430.dp)
+                            .height(heroHeight)
                             .clickable { onWatchClick(item) }
                     ) {
                         AsyncImage(
@@ -745,10 +802,11 @@ private fun FeaturedHeroCarousel(
                                 .background(
                                     Brush.verticalGradient(
                                         colorStops = arrayOf(
-                                            0.0f to Color.Black.copy(alpha = 0.55f),
-                                            0.28f to Color.Transparent,
-                                            0.58f to bgColor.copy(alpha = 0.42f),
-                                            0.84f to bgColor.copy(alpha = 0.88f),
+                                            0.0f to Color.Black.copy(alpha = 0.65f),
+                                            0.18f to Color.Transparent,
+                                            0.52f to Color.Transparent,
+                                            0.72f to bgColor.copy(alpha = 0.50f),
+                                            0.88f to bgColor.copy(alpha = 0.90f),
                                             1.0f to bgColor
                                         )
                                     )
@@ -816,11 +874,11 @@ private fun FeaturedHeroCarousel(
                                 )
                             } else {
                                 Text(
-                                    text = item.name,
+                                    text = item.name.uppercase(),
                                     style = MaterialTheme.typography.headlineLarge.copy(
                                         fontWeight = FontWeight.ExtraBold,
-                                        fontSize = 28.sp,
-                                        letterSpacing = 0.5.sp
+                                        fontSize = 30.sp,
+                                        letterSpacing = 1.sp
                                     ),
                                     color = Color.White,
                                     textAlign = TextAlign.Center,
@@ -836,7 +894,10 @@ private fun FeaturedHeroCarousel(
                             }
                             Text(
                                 text = genresText,
-                                style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.4.sp),
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    letterSpacing = 0.5.sp,
+                                    fontWeight = FontWeight.Medium
+                                ),
                                 color = Color.White.copy(alpha = 0.85f),
                                 textAlign = TextAlign.Center,
                                 maxLines = 1,
@@ -852,12 +913,12 @@ private fun FeaturedHeroCarousel(
                                     contentColor = Color.Black
                                 ),
                                 shape = CircleShape,
-                                contentPadding = PaddingValues(horizontal = 34.dp, vertical = 12.dp),
+                                contentPadding = PaddingValues(horizontal = 38.dp, vertical = 12.dp),
                                 modifier = Modifier.testTag("hero_stream_button")
                             ) {
                                 Text(
                                     text = "More details",
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                     color = Color.Black
                                 )
                             }
@@ -875,7 +936,7 @@ private fun FeaturedHeroCarousel(
                                         Box(
                                             modifier = Modifier
                                                 .padding(horizontal = 3.dp)
-                                                .size(width = if (active) 22.dp else 4.dp, height = 4.dp)
+                                                .size(width = if (active) 24.dp else 5.dp, height = 5.dp)
                                                 .clip(CircleShape)
                                                 .background(
                                                     if (active) Color.White
@@ -893,10 +954,12 @@ private fun FeaturedHeroCarousel(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ContinueWatchingCard(
     item: LibraryMediaItem,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: () -> Unit = {}
 ) {
     val fraction = if (item.durationMs > 0L) {
         (item.watchProgressMs.toFloat() / item.durationMs.toFloat()).coerceIn(0.04f, 1f)
@@ -910,7 +973,10 @@ private fun ContinueWatchingCard(
         modifier = Modifier
             .width(236.dp)
             .clip(cardShape)
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
     ) {
         Box(
             modifier = Modifier
@@ -996,8 +1062,10 @@ private fun ContinueWatchingCard(
                 }
                 val remainingLabel = remember(item.watchProgressMs, item.durationMs) {
                     if (item.durationMs > item.watchProgressMs && item.durationMs > 0L) {
-                        val mins = ((item.durationMs - item.watchProgressMs) / 60_000L).coerceAtLeast(1L)
-                        "${mins}m left"
+                        val remainingSec = (item.durationMs - item.watchProgressMs) / 1000L
+                        val hours = remainingSec / 3600L
+                        val mins = (remainingSec % 3600L) / 60L
+                        if (hours > 0) "${hours}h ${mins}m left" else "${mins}m left"
                     } else "$percent% watched"
                 }
                 Text(
@@ -1007,6 +1075,247 @@ private fun ContinueWatchingCard(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ContinueWatchingOptionsDialog(
+    item: LibraryMediaItem,
+    onDismiss: () -> Unit,
+    onGoToDetails: (LibraryMediaItem) -> Unit,
+    onStartFromBeginning: (LibraryMediaItem) -> Unit,
+    onMarkAsWatched: (LibraryMediaItem) -> Unit,
+    onRemove: (LibraryMediaItem) -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.78f))
+                .clickable(onClick = onDismiss),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .clickable(enabled = false) {}, // prevent click-through
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Floating Preview Card matching Image 1
+                val cardShape = RoundedCornerShape(18.dp)
+                Card(
+                    shape = cardShape,
+                    colors = CardDefaults.cardColors(containerColor = AmoledCard),
+                    modifier = Modifier
+                        .width(280.dp)
+                        .aspectRatio(16f / 9.5f)
+                        .shadow(elevation = 20.dp, shape = cardShape, spotColor = Color.Black)
+                        .machinedCardBorder(shape = cardShape, cornerRadiusDp = 18.dp)
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        AsyncImage(
+                            model = item.backdropUrl.ifBlank { item.posterUrl },
+                            contentDescription = item.title,
+                            placeholder = painterResource(id = R.drawable.img_hero_cinema),
+                            error = painterResource(id = R.drawable.img_hero_cinema),
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colorStops = arrayOf(
+                                            0.0f to Color.Transparent,
+                                            0.40f to Color.Black.copy(alpha = 0.25f),
+                                            1.0f to Color.Black.copy(alpha = 0.90f)
+                                        )
+                                    )
+                                )
+                        )
+
+                        // Top-Right Remaining Time Badge (e.g. "2h 17m left")
+                        val remainingLabel = remember(item.watchProgressMs, item.durationMs) {
+                            if (item.durationMs > item.watchProgressMs && item.durationMs > 0L) {
+                                val remainingSec = (item.durationMs - item.watchProgressMs) / 1000L
+                                val hours = remainingSec / 3600L
+                                val mins = (remainingSec % 3600L) / 60L
+                                if (hours > 0) "${hours}h ${mins}m left" else "${mins}m left"
+                            } else {
+                                val pct = if (item.durationMs > 0L) {
+                                    ((item.watchProgressMs * 100) / item.durationMs).toInt().coerceIn(0, 100)
+                                } else 0
+                                "$pct% watched"
+                            }
+                        }
+                        Surface(
+                            color = Color.Black.copy(alpha = 0.70f),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(10.dp)
+                        ) {
+                            Text(
+                                text = remainingLabel,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp
+                                ),
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+
+                        // Bottom-Left Title & Progress Track
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Text(
+                                text = item.title,
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            val fraction = if (item.durationMs > 0L) {
+                                (item.watchProgressMs.toFloat() / item.durationMs.toFloat()).coerceIn(0.04f, 1f)
+                            } else 0.35f
+                            Box(
+                                modifier = Modifier
+                                    .width(110.dp)
+                                    .height(3.5.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.30f))
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(fraction)
+                                        .height(3.5.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.White)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Title & Subtitle Below Card
+                Text(
+                    text = item.title,
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 22.sp
+                    ),
+                    color = Color.White,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                val typeLabel = if (item.mediaType.contains("series", ignoreCase = true)) "Series" else "Movie"
+                Text(
+                    text = typeLabel,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.65f),
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Rounded Options Card matching Image 1
+                Surface(
+                    color = Color(0xFF1E1E1E),
+                    shape = RoundedCornerShape(22.dp),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+                    modifier = Modifier.width(310.dp)
+                ) {
+                    Column {
+                        // 1. Go to details
+                        OptionItemRow(
+                            label = "Go to details",
+                            icon = Icons.Rounded.Info,
+                            onClick = {
+                                onDismiss()
+                                onGoToDetails(item)
+                            }
+                        )
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.08f), thickness = 0.8.dp)
+
+                        // 2. Start from beginning
+                        OptionItemRow(
+                            label = "Start from beginning",
+                            icon = Icons.Rounded.RestartAlt,
+                            onClick = {
+                                onDismiss()
+                                onStartFromBeginning(item)
+                            }
+                        )
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.08f), thickness = 0.8.dp)
+
+                        // 3. Mark as watched
+                        OptionItemRow(
+                            label = "Mark as watched",
+                            icon = Icons.Rounded.CheckCircle,
+                            onClick = {
+                                onDismiss()
+                                onMarkAsWatched(item)
+                            }
+                        )
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.08f), thickness = 0.8.dp)
+
+                        // 4. Remove
+                        OptionItemRow(
+                            label = "Remove",
+                            icon = Icons.Rounded.DeleteOutline,
+                            tint = Color(0xFFFF5252),
+                            onClick = {
+                                onDismiss()
+                                onRemove(item)
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OptionItemRow(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    tint: Color = Color.White,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+            color = tint
+        )
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = tint.copy(alpha = if (tint == Color.White) 0.80f else 1.0f),
+            modifier = Modifier.size(22.dp)
+        )
     }
 }
 

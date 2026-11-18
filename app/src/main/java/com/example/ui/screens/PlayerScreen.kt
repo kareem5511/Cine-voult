@@ -1328,7 +1328,7 @@ fun PlayerScreen(
                     }
                 }
 
-                // Isolated Bottom Scrub Bar + Bottom-Left Title/Episode/Year Block + Telemetry Pill
+                // Isolated Bottom Scrub Bar + Bottom-Left Title/Episode/Year Block
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1336,15 +1336,6 @@ fun PlayerScreen(
                         .padding(horizontal = 14.dp, vertical = 6.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    val bufferedMb = (uiState.bufferedBytesEstimate / (1024.0 * 1024.0)).coerceAtLeast(0.0)
-                    val speedMb = (uiState.networkSpeedBytesPerSec / (1024.0 * 1024.0)).coerceAtLeast(0.0)
-                    val bufferedLabel = if (bufferedMb >= 10.0) {
-                        "+${bufferedMb.roundToInt()} MB buffered"
-                    } else {
-                        String.format("+%.1f MB buffered", bufferedMb)
-                    }
-                    val speedLabel = String.format("%.1f MB/s", speedMb)
-
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1404,20 +1395,6 @@ fun PlayerScreen(
                                 text = "2026",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.White.copy(alpha = 0.65f)
-                            )
-                        }
-
-                        Surface(
-                            color = Color.Black.copy(alpha = 0.56f),
-                            shape = RoundedCornerShape(50),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
-                            modifier = Modifier.testTag("player_buffer_telemetry")
-                        ) {
-                            Text(
-                                text = "$bufferedLabel • $speedLabel",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White.copy(alpha = 0.86f),
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
                             )
                         }
                     }

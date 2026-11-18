@@ -588,6 +588,43 @@ private fun CineVaultShell(
                                             showTitleDetailModal = true
                                         }
                                     },
+                                    onRestartItem = { libItem ->
+                                        if (libItem.streamUrl.isNotBlank()) {
+                                            navController.navigate(
+                                                PlayerRoute(
+                                                    mediaKey = libItem.mediaKey,
+                                                    title = libItem.title,
+                                                    mediaType = libItem.mediaType,
+                                                    streamUrl = libItem.streamUrl,
+                                                    posterUrl = libItem.posterUrl,
+                                                    backdropUrl = libItem.backdropUrl,
+                                                    imdbId = libItem.mediaKey,
+                                                    initialPositionMs = 0L,
+                                                    preferredEngine = preferredEngine.key
+                                                )
+                                            )
+                                        } else {
+                                            viewModel.loadMediaDetail(
+                                                StremioMetaPreview(
+                                                    id = libItem.mediaKey,
+                                                    type = if (libItem.mediaType == "series") "series" else "movie",
+                                                    name = libItem.title,
+                                                    poster = libItem.posterUrl.ifBlank { null },
+                                                    background = libItem.backdropUrl.ifBlank { null },
+                                                    description = libItem.overview.ifBlank { null },
+                                                    releaseInfo = libItem.year.ifBlank { null },
+                                                    imdbRating = libItem.imdbRating.ifBlank { null }
+                                                )
+                                            )
+                                            showTitleDetailModal = true
+                                        }
+                                    },
+                                    onMarkAsWatched = { libItem ->
+                                        viewModel.markAsWatched(libItem.mediaKey)
+                                    },
+                                    onRemoveContinueWatching = { libItem ->
+                                        viewModel.removeContinueWatching(libItem.mediaKey)
+                                    },
                                     onQuickFavorite = viewModel::toggleFavorite,
                                     onSelectCatalogGenre = viewModel::selectCatalogGenre,
                                     onLoadMoreCatalog = viewModel::loadMoreCatalogItems,
