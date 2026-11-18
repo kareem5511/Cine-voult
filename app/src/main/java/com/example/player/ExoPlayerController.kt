@@ -288,6 +288,16 @@ class ExoPlayerController(private val context: Context) {
         if (exo.isPlaying) exo.pause() else exo.play()
     }
 
+    fun play() {
+        val exo = player ?: return
+        exo.play()
+    }
+
+    fun pause() {
+        val exo = player ?: return
+        exo.pause()
+    }
+
     fun seekTo(positionMs: Long) {
         val exo = player ?: return
         val maxDur = exo.duration.takeIf { it > 0L } ?: Long.MAX_VALUE

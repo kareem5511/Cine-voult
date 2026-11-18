@@ -216,6 +216,9 @@ fun PlayerScreen(
         context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
     }
 
+    val exoController = remember { ExoPlayerController(context) }
+    val uiState by exoController.state.collectAsStateWithLifecycle()
+
     var activeMediaKey by remember { mutableStateOf(request.mediaKey) }
     var activeTitle by remember { mutableStateOf(request.title) }
     val baseShowTitle = remember(request.title) {
@@ -281,6 +284,7 @@ fun PlayerScreen(
     var isSwitchingUpNext by remember { mutableStateOf(false) }
     var isResolvingEpisodeStreams by remember { mutableStateOf(false) }
     var autoMatchToast by remember { mutableStateOf<String?>(null) }
+    var autoMatchToastToken by remember { mutableIntStateOf(0) }
     var episodeEmptyError by remember { mutableStateOf<String?>(null) }
 
     // Double-tap edge seek state (YouTube-style accumulating -10s, -20s... or +10s, +20s...)
@@ -425,9 +429,6 @@ fun PlayerScreen(
             hudToken++
         }
     }
-
-    val exoController = remember { ExoPlayerController(context) }
-    val uiState by exoController.state.collectAsStateWithLifecycle()
 
     // Resolve sources/subtitles dynamically if missing (e.g. launched from Vault or Up Next)
     LaunchedEffect(activeImdbId, activeMediaType) {
