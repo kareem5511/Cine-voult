@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import com.example.BuildConfig
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
@@ -800,7 +801,7 @@ fun SettingsScreen(
         // 5. Backup, Sync & APK Accordion
         if (showBackup) {
             item {
-                val summary = "CineVault v2.4.0 • ${if (isGuestMode) "Local Guest" else "Cloud Sync"}"
+                val summary = "CineVault v${BuildConfig.VERSION_NAME} • ${if (isGuestMode) "Local Guest" else "Cloud Sync"}"
                 CollapsibleSettingsCard(
                     title = "Backup, Sync & APK",
                     icon = Icons.Rounded.CloudSync,
@@ -1132,7 +1133,7 @@ fun SettingsScreen(
                                 )
                             }
                             Text(
-                                text = "CineVault v2.4.0 (Pure AMOLED Edition)\nAndroid SDK 34 • NextPlayer FFmpeg Engine\nMedia3 NextLib Media3Ext • Stremio v11 Addon Protocol",
+                                text = "CineVault v${BuildConfig.VERSION_NAME} (Pure AMOLED Edition)\nAndroid SDK 36 • NextPlayer FFmpeg Engine\nMedia3 NextLib Media3Ext • Stremio v11 Addon Protocol",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color.White.copy(alpha = 0.55f),
                                 lineHeight = 18.sp

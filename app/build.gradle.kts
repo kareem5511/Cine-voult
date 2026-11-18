@@ -18,8 +18,8 @@ android {
     applicationId = "com.aistudio.cinevault.mrxkqp"
     minSdk = 24
     targetSdk = 36
-    versionCode = 6
-    versionName = "1.2.3"
+    versionCode = 7
+    versionName = "1.2.4"
 
     val mobileAbiProp = providers.gradleProperty("mobileAbi").orNull
     if (!mobileAbiProp.isNullOrBlank()) {
