@@ -1641,6 +1641,11 @@ private fun RelatedPosterCard(
             }
 
             if (!item.imdbRating.isNullOrBlank()) {
+                val formattedRating = remember(item.imdbRating) {
+                    item.imdbRating.toDoubleOrNull()?.let {
+                        String.format(java.util.Locale.US, "%.1f", it)
+                    } ?: item.imdbRating
+                }
                 Surface(
                     color = Color.Black.copy(alpha = 0.75f),
                     shape = RoundedCornerShape(bottomEnd = 8.dp),
@@ -1658,7 +1663,7 @@ private fun RelatedPosterCard(
                             modifier = Modifier.size(12.dp)
                         )
                         Text(
-                            text = item.imdbRating.orEmpty(),
+                            text = formattedRating,
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
                             color = Color.White
                         )

@@ -582,13 +582,14 @@ class CineVaultViewModel(
                 mediaId = streamTargetId
             )
 
-            val allCatalogItems = _discoverFeedState.value.flatMap { it.items }
-            val currentGenres = (resolvedDetail?.genres ?: preview.genres).toSet()
+            val allCatalogItems = _discoverState.value.sections.flatMap { it.items }
+            val currentGenres = (resolvedDetail?.genres ?: preview.genres).orEmpty().toSet()
             val related = allCatalogItems
                 .filter { it.id != preview.id && (it.type.equals(preview.type, ignoreCase = true) || preview.type.isBlank()) }
                 .distinctBy { it.id }
-                .sortedByDescending { item ->
-                    val sharedGenreCount = item.genres.count { it in currentGenres }
+                .sortedByDescending { item: StremioMetaPreview ->
+                    val itemGenres = item.genres.orEmpty()
+                    val sharedGenreCount = itemGenres.count { it in currentGenres }
                     val hasRating = item.imdbRating?.toDoubleOrNull() ?: 0.0
                     (sharedGenreCount * 10.0) + hasRating
                 }

@@ -455,11 +455,17 @@ fun DiscoverScreen(
                 contentType = { "catalog_section" }
             ) { section ->
                 val typeLabel = if (section.type.equals("series", ignoreCase = true)) "Series" else "Movies"
-                val sectionTitle = remember(section.catalogTitle, typeLabel) {
-                    if (section.catalogTitle.contains("•") || section.catalogTitle.contains("(")) {
+                val sectionTitle = remember(section.catalogTitle, section.addonName, typeLabel, visibleSections) {
+                    val rawTitle = if (section.catalogTitle.contains("•") || section.catalogTitle.contains("(")) {
                         section.catalogTitle
                     } else {
                         "${section.catalogTitle} • $typeLabel"
+                    }
+                    val duplicates = visibleSections.count { it.catalogTitle.equals(section.catalogTitle, ignoreCase = true) }
+                    if (duplicates > 1 && section.addonName.isNotBlank() && !rawTitle.contains(section.addonName, ignoreCase = true)) {
+                        "$rawTitle • ${section.addonName}"
+                    } else {
+                        rawTitle
                     }
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1057,6 +1063,7 @@ private fun PosterMediaCard(
                 AsyncImage(
                     model = item.poster,
                     contentDescription = item.name,
+                    error = painterResource(id = R.drawable.img_hero_cinema),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -1073,6 +1080,11 @@ private fun PosterMediaCard(
 
             // Top-Right Single Yellow IMDb Rating Badge
             if (!item.imdbRating.isNullOrBlank()) {
+                val formattedRating = remember(item.imdbRating) {
+                    item.imdbRating.toDoubleOrNull()?.let {
+                        String.format(java.util.Locale.US, "%.1f", it)
+                    } ?: item.imdbRating
+                }
                 Surface(
                     color = Color(0xFF14171C).copy(alpha = 0.92f),
                     shape = RoundedCornerShape(8.dp),
@@ -1101,7 +1113,7 @@ private fun PosterMediaCard(
                             )
                         }
                         Text(
-                            text = item.imdbRating,
+                            text = formattedRating,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 11.5.sp
