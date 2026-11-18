@@ -309,7 +309,7 @@ private fun WatchlistTab(
         }
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
-            contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 120.dp),
+            contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 150.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxSize()
@@ -504,7 +504,7 @@ private fun CloudVaultTab(
     val totalCachedBytes = remember(downloads) { downloads.sumOf { it.bytesDownloaded } }
 
     LazyColumn(
-        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 120.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 150.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier.fillMaxSize()
     ) {
@@ -728,7 +728,7 @@ private fun OfflineDownloadsTab(
     }
 
     LazyColumn(
-        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 120.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 150.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier.fillMaxSize()
     ) {
@@ -954,7 +954,7 @@ private fun LocalMediaTab(
     }
 
     LazyColumn(
-        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 120.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 150.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier.fillMaxSize()
     ) {

@@ -444,7 +444,8 @@ private fun CineVaultShell(
                 posterUrl = p.poster.orEmpty(),
                 streamUrl = url,
                 subtitleUrl = bestSub?.url.orEmpty(),
-                qualityLabel = stream.fullFileName()
+                qualityLabel = stream.fullFileName(),
+                initialTotalBytes = stream.parseSizeBytes()
             )
         }
     }

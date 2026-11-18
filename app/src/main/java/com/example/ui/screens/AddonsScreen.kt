@@ -122,7 +122,7 @@ fun AddonsScreen(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black),
-        contentPadding = PaddingValues(start = 16.dp, top = 20.dp, end = 16.dp, bottom = 120.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 20.dp, end = 16.dp, bottom = 150.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
@@ -411,7 +411,10 @@ fun AddonsScreen(
                                                 Text(
                                                     text = entry.name,
                                                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                                    color = Color.White
+                                                    color = Color.White,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    modifier = Modifier.weight(1f, fill = false)
                                                 )
                                                 Surface(
                                                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
@@ -421,6 +424,8 @@ fun AddonsScreen(
                                                         text = entry.category,
                                                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                                         color = MaterialTheme.colorScheme.primary,
+                                                        maxLines = 1,
+                                                        softWrap = false,
                                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                                     )
                                                 }

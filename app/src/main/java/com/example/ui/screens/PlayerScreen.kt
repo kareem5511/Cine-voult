@@ -1927,6 +1927,7 @@ private fun VideoSourceSwitchSheet(
     onSelectSource: (StreamSourceOption) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -1943,7 +1944,7 @@ private fun VideoSourceSwitchSheet(
                 )
             } else {
                 LazyColumn(
-                    modifier = Modifier.height(280.dp),
+                    modifier = Modifier.heightIn(max = if (isLandscape) 180.dp else 280.dp),
                     contentPadding = PaddingValues(bottom = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -2023,6 +2024,7 @@ private fun SubtitleStudioSheet(
     onChangeDelay: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -2084,7 +2086,7 @@ private fun SubtitleStudioSheet(
             }
 
             LazyColumn(
-                modifier = Modifier.height(260.dp),
+                modifier = Modifier.heightIn(max = if (isLandscape) 170.dp else 260.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 item {
@@ -2168,134 +2170,258 @@ fun AudioTrackSheet(
     onDismiss: () -> Unit
 ) {
     val activeGreen = Color(0xFF22C55E)
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
     ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text("Audio Settings & Tracks", style = MaterialTheme.typography.titleLarge)
-
-            // Audio Boost & Night Mode enhancements
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
-                modifier = Modifier.fillMaxWidth()
+        if (isLandscape) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "Night Mode (Dialogue Clarity)",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                                color = Color.White
-                            )
-                            Text(
-                                "Evens out loud dynamic spikes for clear speech",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = nightModeActive,
-                            onCheckedChange = onNightModeToggle
-                        )
-                    }
-
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
-
-                    Text(
-                        "Volume Boost (${(volumeBoost * 100).roundToInt()}%)",
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = Color.White
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        listOf(1.0f to "100%", 1.25f to "125%", 1.5f to "150%", 2.0f to "200%").forEach { (boost, label) ->
-                            val isSelected = abs(volumeBoost - boost) < 0.05f
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = { onVolumeBoostChange(boost) },
-                                label = { Text(label) }
-                            )
-                        }
-                    }
-                }
-            }
-
-            Text(
-                "Audio Tracks",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            if (tracks.isEmpty()) {
                 Text(
-                    text = "Default stream audio active.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 32.dp)
+                    "Audio Settings & Tracks",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                 )
-            } else {
-                LazyColumn(
+
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 280.dp)
-                        .testTag("audio_tracks_list"),
-                    contentPadding = PaddingValues(bottom = 32.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                        .padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.Top
                 ) {
-                    items(tracks, key = { it.id }) { track ->
-                        Surface(
-                            color = if (track.isSelected) {
-                                activeGreen.copy(alpha = 0.14f)
-                            } else {
-                                MaterialTheme.colorScheme.surfaceContainer
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            border = if (track.isSelected) {
-                                BorderStroke(2.dp, activeGreen)
-                            } else {
-                                BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable { onSelect(track.id) }
-                                .testTag("audio_track_row_${track.id}")
+                    // Left Column: Audio Enhancements
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Row(
-                                modifier = Modifier.padding(14.dp),
+                                modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = track.label,
-                                    color = if (track.isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = if (track.isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                    modifier = Modifier.weight(1f)
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Night Mode (Clarity)",
+                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                                        color = Color.White
+                                    )
+                                    Text(
+                                        "Evens out loud dynamic spikes",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Switch(
+                                    checked = nightModeActive,
+                                    onCheckedChange = onNightModeToggle
                                 )
-                                if (track.isSelected) {
-                                    Icon(
-                                        Icons.Rounded.CheckCircle,
-                                        contentDescription = "Selected",
-                                        tint = activeGreen
+                            }
+
+                            HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+
+                            Text(
+                                "Volume Boost (${(volumeBoost * 100).roundToInt()}%)",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                                color = Color.White
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                listOf(1.0f to "100%", 1.25f to "125%", 1.5f to "150%", 2.0f to "200%").forEach { (boost, label) ->
+                                    val isSelected = abs(volumeBoost - boost) < 0.05f
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = { onVolumeBoostChange(boost) },
+                                        label = { Text(label) }
                                     )
                                 }
                             }
                         }
                     }
+
+                    // Right Column: Audio Tracks
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            "Audio Tracks",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        if (tracks.isEmpty()) {
+                            Text(
+                                text = "Default stream audio active.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(vertical = 12.dp)
+                            )
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 190.dp)
+                                    .testTag("audio_tracks_list"),
+                                contentPadding = PaddingValues(bottom = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                items(tracks, key = { it.id }) { track ->
+                                    AudioTrackRow(track = track, activeGreen = activeGreen, onSelect = onSelect)
+                                }
+                            }
+                        }
+                    }
                 }
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text("Audio Settings & Tracks", style = MaterialTheme.typography.titleLarge)
+
+                // Audio Boost & Night Mode enhancements
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Night Mode (Dialogue Clarity)",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                                    color = Color.White
+                                )
+                                Text(
+                                    "Evens out loud dynamic spikes for clear speech",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = nightModeActive,
+                                onCheckedChange = onNightModeToggle
+                            )
+                        }
+
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+
+                        Text(
+                            "Volume Boost (${(volumeBoost * 100).roundToInt()}%)",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = Color.White
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf(1.0f to "100%", 1.25f to "125%", 1.5f to "150%", 2.0f to "200%").forEach { (boost, label) ->
+                                val isSelected = abs(volumeBoost - boost) < 0.05f
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { onVolumeBoostChange(boost) },
+                                    label = { Text(label) }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Text(
+                    "Audio Tracks",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                if (tracks.isEmpty()) {
+                    Text(
+                        text = "Default stream audio active.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 32.dp)
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 280.dp)
+                            .testTag("audio_tracks_list"),
+                        contentPadding = PaddingValues(bottom = 32.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(tracks, key = { it.id }) { track ->
+                            AudioTrackRow(track = track, activeGreen = activeGreen, onSelect = onSelect)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AudioTrackRow(
+    track: com.example.player.PlayerTrackInfo,
+    activeGreen: Color,
+    onSelect: (String) -> Unit
+) {
+    Surface(
+        color = if (track.isSelected) {
+            activeGreen.copy(alpha = 0.14f)
+        } else {
+            MaterialTheme.colorScheme.surfaceContainer
+        },
+        shape = RoundedCornerShape(12.dp),
+        border = if (track.isSelected) {
+            BorderStroke(2.dp, activeGreen)
+        } else {
+            BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onSelect(track.id) }
+            .testTag("audio_track_row_${track.id}")
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = track.label,
+                color = if (track.isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
+                fontWeight = if (track.isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                modifier = Modifier.weight(1f)
+            )
+            if (track.isSelected) {
+                Icon(
+                    Icons.Rounded.CheckCircle,
+                    contentDescription = "Selected",
+                    tint = activeGreen
+                )
             }
         }
     }

@@ -31,11 +31,15 @@ class MediaDownloadWorker(
 
     private val db = CineVaultDatabase.getInstance(appContext)
     private val dao = db.downloadDao()
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .followRedirects(true)
-        .build()
+    private val client: OkHttpClient by lazy {
+        (appContext.applicationContext as? com.example.CineVaultApplication)?.sharedOkHttpClient
+            ?: OkHttpClient.Builder()
+                .connectTimeout(20, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
+                .followRedirects(true)
+                .followSslRedirects(true)
+                .build()
+    }
 
     override suspend fun doWork(): Result {
         val downloadKey = inputData.getString(KEY_DOWNLOAD_KEY) ?: return Result.failure()
@@ -72,19 +76,26 @@ class MediaDownloadWorker(
                     error("HTTP ${response.code} downloading media")
                 }
                 val body = response.body ?: error("Empty response stream")
-                val totalBytes = body.contentLength().coerceAtLeast(0L)
+                val streamContentLength = body.contentLength()
+                val totalBytes = when {
+                    streamContentLength > 0L -> streamContentLength
+                    entry.totalBytes > 0L -> entry.totalBytes
+                    else -> 0L
+                }
                 var downloaded = 0L
                 var lastPct = -1
+                var lastUpdateMs = System.currentTimeMillis()
 
                 body.byteStream().use { input ->
                     FileOutputStream(outFile).use { output ->
-                        val buffer = ByteArray(16 * 1024)
+                        val buffer = ByteArray(64 * 1024)
                         while (true) {
                             if (isStopped) {
+                                val currentPct = if (totalBytes > 0L) ((downloaded * 100) / totalBytes).toInt().coerceIn(0, 100) else 0
                                 dao.updateProgress(
                                     key = downloadKey,
                                     status = DownloadStatus.PAUSED.name,
-                                    progress = if (totalBytes > 0) ((downloaded * 100) / totalBytes).toInt() else 0,
+                                    progress = currentPct,
                                     bytes = downloaded,
                                     total = totalBytes,
                                     localPath = outFile.absolutePath,
@@ -96,8 +107,11 @@ class MediaDownloadWorker(
                             if (read == -1) break
                             output.write(buffer, 0, read)
                             downloaded += read
-                            val pct = if (totalBytes > 0) ((downloaded * 100) / totalBytes).toInt().coerceIn(0, 100) else 0
-                            if (pct != lastPct && (pct % 5 == 0 || pct == 100)) {
+                            val pct = if (totalBytes > 0L) ((downloaded * 100) / totalBytes).toInt().coerceIn(0, 100) else 0
+                            val now = System.currentTimeMillis()
+                            val shouldUpdateDb = (now - lastUpdateMs >= 800L) || (pct != lastPct && pct % 2 == 0)
+                            if (shouldUpdateDb) {
+                                lastUpdateMs = now
                                 lastPct = pct
                                 dao.updateProgress(
                                     key = downloadKey,
@@ -138,7 +152,7 @@ class MediaDownloadWorker(
                     status = DownloadStatus.COMPLETED.name,
                     progress = 100,
                     bytes = finalSize,
-                    total = if (totalBytes > 0) totalBytes else finalSize,
+                    total = if (totalBytes > 0L) totalBytes else finalSize,
                     localPath = outFile.absolutePath,
                     subPath = savedSubPath
                 )
@@ -218,7 +232,8 @@ class OfflineDownloadManager(private val context: Context) {
         streamUrl: String,
         subtitleUrl: String,
         qualityLabel: String,
-        wifiOnly: Boolean
+        wifiOnly: Boolean,
+        initialTotalBytes: Long = 0L
     ): String {
         val downloadKey = "${mediaKey}_${streamUrl.hashCode().toUInt()}"
         val entity = OfflineDownloadEntity(
@@ -232,7 +247,8 @@ class OfflineDownloadManager(private val context: Context) {
             localFilePath = "",
             localSubtitlePath = "",
             qualityLabel = qualityLabel,
-            status = DownloadStatus.QUEUED.name
+            status = DownloadStatus.QUEUED.name,
+            totalBytes = initialTotalBytes
         )
         db.downloadDao().upsert(entity)
 

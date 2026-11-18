@@ -953,7 +953,8 @@ class CineVaultViewModel(
         posterUrl: String,
         streamUrl: String,
         subtitleUrl: String,
-        qualityLabel: String
+        qualityLabel: String,
+        initialTotalBytes: Long = 0L
     ) {
         viewModelScope.launch {
             val wifiOnly = preferencesState.value.downloadWifiOnly
@@ -965,7 +966,8 @@ class CineVaultViewModel(
                 streamUrl = streamUrl,
                 subtitleUrl = subtitleUrl,
                 qualityLabel = qualityLabel,
-                wifiOnly = wifiOnly
+                wifiOnly = wifiOnly,
+                initialTotalBytes = initialTotalBytes
             )
             _statusBanner.value = "Downloading \"$title\" for offline viewing"
         }

@@ -280,6 +280,18 @@ data class StremioStream(
         }
     }
 
+    fun parseSizeBytes(): Long {
+        val text = listOfNotNull(name, title, description, behaviorHints?.filename).joinToString(" ")
+        val match = Regex("""(\d+(?:\.\d+)?)\s*(GB|MB|GiB|MiB)""", RegexOption.IGNORE_CASE).find(text) ?: return 0L
+        val num = match.groupValues[1].toDoubleOrNull() ?: 0.0
+        val unit = match.groupValues[2].uppercase()
+        return if (unit.startsWith("G")) {
+            (num * 1024 * 1024 * 1024).toLong()
+        } else {
+            (num * 1024 * 1024).toLong()
+        }
+    }
+
     fun streamingBadges(): List<String> {
         val combined = listOfNotNull(name, title, description, behaviorHints?.filename, url)
             .joinToString(" ")
