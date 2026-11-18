@@ -115,7 +115,8 @@ fun MediaDetailScreen(
     isModal: Boolean = false,
     downloads: List<OfflineDownloadEntity> = emptyList(),
     onNavigateToOffline: () -> Unit = {},
-    onSelectRelatedMedia: (StremioMetaPreview) -> Unit = {}
+    onSelectRelatedMedia: (StremioMetaPreview) -> Unit = {},
+    onSearchActor: (String) -> Unit = {}
 ) {
     BackHandler(onBack = onBack)
 
@@ -603,7 +604,14 @@ fun MediaDetailScreen(
                             MovieDetailGridCard(label = "DURATION", value = duration, modifier = Modifier.weight(1f))
                         }
                         if (directors.isNotEmpty()) {
-                            MovieDetailGridCard(label = "DIRECTOR", value = directors.joinToString(", "), modifier = Modifier.fillMaxWidth())
+                            MovieDetailGridCard(
+                                label = "DIRECTOR (TAP TO BROWSE)",
+                                value = directors.joinToString(", "),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .clickable { directors.firstOrNull()?.let(onSearchActor) }
+                            )
                         }
                     }
 
@@ -614,16 +622,27 @@ fun MediaDetailScreen(
 
                     if (castList.isNotEmpty()) {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(
-                                text = "Cast",
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                                color = Color.White
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Cast",
+                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "Tap to browse filmography",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                             LazyRow(
                                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                                 modifier = Modifier.testTag("detail_cast_row")
                             ) {
-                                items(castList.take(12), key = { it }) { actorName ->
+                                items(castList.take(16), key = { it }) { actorName ->
                                     val initials = remember(actorName) {
                                         actorName.trim().split(" ")
                                             .filter { it.isNotBlank() }
@@ -634,7 +653,10 @@ fun MediaDetailScreen(
                                     }
                                     Column(
                                         horizontalAlignment = Alignment.CenterHorizontally,
-                                        modifier = Modifier.width(86.dp)
+                                        modifier = Modifier
+                                            .width(86.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .clickable { onSearchActor(actorName) }
                                     ) {
                                         Surface(
                                             shape = CircleShape,

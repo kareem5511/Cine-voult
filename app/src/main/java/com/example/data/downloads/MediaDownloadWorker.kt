@@ -66,28 +66,39 @@ class MediaDownloadWorker(
                 subPath = ""
             )
 
-            val request = Request.Builder()
+            val existingBytes = if (outFile.exists() && entry.bytesDownloaded > 0L) outFile.length() else 0L
+            val requestBuilder = Request.Builder()
                 .url(entry.streamUrl)
                 .header("User-Agent", "CineVault-Android/1.0")
-                .build()
+
+            if (existingBytes > 0L) {
+                requestBuilder.header("Range", "bytes=$existingBytes-")
+            }
+            val request = requestBuilder.build()
 
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
+                if (!response.isSuccessful && response.code != 206) {
                     error("HTTP ${response.code} downloading media")
                 }
+                val isPartial = response.code == 206
+                val actualStartingBytes = if (isPartial) existingBytes else 0L
                 val body = response.body ?: error("Empty response stream")
                 val streamContentLength = body.contentLength()
                 val totalBytes = when {
+                    streamContentLength > 0L && isPartial -> actualStartingBytes + streamContentLength
                     streamContentLength > 0L -> streamContentLength
                     entry.totalBytes > 0L -> entry.totalBytes
                     else -> 0L
                 }
-                var downloaded = 0L
+                var downloaded = actualStartingBytes
                 var lastPct = -1
                 var lastUpdateMs = System.currentTimeMillis()
+                var lastSpeedBytes = actualStartingBytes
+                var lastSpeedTimeMs = System.currentTimeMillis()
+                var currentSpeedEta = ""
 
                 body.byteStream().use { input ->
-                    FileOutputStream(outFile).use { output ->
+                    FileOutputStream(outFile, isPartial).use { output ->
                         val buffer = ByteArray(64 * 1024)
                         while (true) {
                             if (isStopped) {
@@ -99,7 +110,8 @@ class MediaDownloadWorker(
                                     bytes = downloaded,
                                     total = totalBytes,
                                     localPath = outFile.absolutePath,
-                                    subPath = ""
+                                    subPath = "",
+                                    error = "Paused"
                                 )
                                 return Result.failure()
                             }
@@ -107,8 +119,25 @@ class MediaDownloadWorker(
                             if (read == -1) break
                             output.write(buffer, 0, read)
                             downloaded += read
+
                             val pct = if (totalBytes > 0L) ((downloaded * 100) / totalBytes).toInt().coerceIn(0, 100) else 0
                             val now = System.currentTimeMillis()
+
+                            // Calculate rolling speed & ETA
+                            val speedElapsed = now - lastSpeedTimeMs
+                            if (speedElapsed >= 1000L) {
+                                val bytesDelta = downloaded - lastSpeedBytes
+                                val bytesPerSec = (bytesDelta * 1000L) / speedElapsed
+                                val speedStr = formatSpeed(bytesPerSec)
+                                val etaStr = if (totalBytes > downloaded && bytesPerSec > 0L) {
+                                    val etaSec = (totalBytes - downloaded) / bytesPerSec
+                                    formatEta(etaSec)
+                                } else ""
+                                currentSpeedEta = if (etaStr.isNotBlank()) "$speedStr • $etaStr" else speedStr
+                                lastSpeedBytes = downloaded
+                                lastSpeedTimeMs = now
+                            }
+
                             val shouldUpdateDb = (now - lastUpdateMs >= 800L) || (pct != lastPct && pct % 2 == 0)
                             if (shouldUpdateDb) {
                                 lastUpdateMs = now
@@ -120,10 +149,11 @@ class MediaDownloadWorker(
                                     bytes = downloaded,
                                     total = totalBytes,
                                     localPath = outFile.absolutePath,
-                                    subPath = ""
+                                    subPath = "",
+                                    error = currentSpeedEta
                                 )
                                 runCatching {
-                                    setForeground(createForegroundInfo(entry.title, pct, downloadKey.hashCode()))
+                                    setForeground(createForegroundInfo(entry.title, pct, downloadKey.hashCode(), currentSpeedEta))
                                 }
                             }
                         }
@@ -198,11 +228,12 @@ class MediaDownloadWorker(
         }
     }
 
-    private fun createForegroundInfo(title: String, progress: Int, notifId: Int): ForegroundInfo {
+    private fun createForegroundInfo(title: String, progress: Int, notifId: Int, speedInfo: String = ""): ForegroundInfo {
+        val contentText = if (speedInfo.isNotBlank()) "$progress% • $speedInfo" else "$progress% complete"
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentTitle("Downloading $title")
-            .setContentText("$progress% complete")
+            .setContentText(contentText)
             .setProgress(100, progress, progress == 0)
             .setOngoing(true)
             .build()
@@ -211,6 +242,26 @@ class MediaDownloadWorker(
             ForegroundInfo(notifId, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
             ForegroundInfo(notifId, notification)
+        }
+    }
+
+    private fun formatSpeed(bytesPerSec: Long): String {
+        val kb = bytesPerSec / 1024.0
+        val mb = kb / 1024.0
+        return when {
+            mb >= 1.0 -> String.format(java.util.Locale.US, "%.1f MB/s", mb)
+            kb >= 1.0 -> String.format(java.util.Locale.US, "%.0f KB/s", kb)
+            else -> "${bytesPerSec} B/s"
+        }
+    }
+
+    private fun formatEta(seconds: Long): String {
+        val mins = seconds / 60
+        val secs = seconds % 60
+        return when {
+            mins >= 60 -> "${mins / 60}h ${mins % 60}m"
+            mins > 0 -> "${mins}m ${secs}s"
+            else -> "${secs}s"
         }
     }
 
@@ -269,6 +320,52 @@ class OfflineDownloadManager(private val context: Context) {
 
         workManager.enqueueUniqueWork(downloadKey, ExistingWorkPolicy.REPLACE, request)
         return downloadKey
+    }
+
+    suspend fun pauseDownload(downloadKey: String) {
+        workManager.cancelUniqueWork(downloadKey)
+        val item = db.downloadDao().getByKey(downloadKey) ?: return
+        db.downloadDao().updateProgress(
+            key = downloadKey,
+            status = DownloadStatus.PAUSED.name,
+            progress = item.progressPercent,
+            bytes = item.bytesDownloaded,
+            total = item.totalBytes,
+            localPath = item.localFilePath,
+            subPath = item.localSubtitlePath,
+            error = "Paused"
+        )
+    }
+
+    suspend fun resumeDownload(downloadKey: String, wifiOnly: Boolean) {
+        val item = db.downloadDao().getByKey(downloadKey) ?: return
+        db.downloadDao().updateProgress(
+            key = downloadKey,
+            status = DownloadStatus.QUEUED.name,
+            progress = item.progressPercent,
+            bytes = item.bytesDownloaded,
+            total = item.totalBytes,
+            localPath = item.localFilePath,
+            subPath = item.localSubtitlePath,
+            error = ""
+        )
+
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
+            .build()
+
+        val request = OneTimeWorkRequestBuilder<MediaDownloadWorker>()
+            .setConstraints(constraints)
+            .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+            .setInputData(
+                Data.Builder()
+                    .putString(MediaDownloadWorker.KEY_DOWNLOAD_KEY, downloadKey)
+                    .build()
+            )
+            .addTag(downloadKey)
+            .build()
+
+        workManager.enqueueUniqueWork(downloadKey, ExistingWorkPolicy.REPLACE, request)
     }
 
     suspend fun cancelAndDelete(downloadKey: String) {

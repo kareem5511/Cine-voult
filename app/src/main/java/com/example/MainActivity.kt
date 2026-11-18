@@ -611,6 +611,8 @@ private fun CineVaultShell(
                                     onRefreshLocalMetadata = viewModel::refreshLocalMetadata,
                                     onDeleteLocalMedia = viewModel::deleteLocalMedia,
                                     onDeleteDownload = viewModel::deleteDownload,
+                                    onPauseDownload = viewModel::pauseDownload,
+                                    onResumeDownload = viewModel::resumeDownload,
                                     onPlayRequest = { req ->
                                         navController.navigate(
                                             PlayerRoute(
@@ -651,6 +653,8 @@ private fun CineVaultShell(
                                     preferences = preferences,
                                     userEmail = userEmail,
                                     isGuestMode = isGuestMode,
+                                    installedAddons = (addonsState as? UiState.Success)?.data.orEmpty(),
+                                    onInstallAddon = viewModel::installAddon,
                                     onUpdatePreferences = viewModel::updatePreferences,
                                     onSignInClick = {
                                         GoogleAuthManager.launchInteractiveGoogleSignIn(
@@ -693,7 +697,17 @@ private fun CineVaultShell(
                                             restoreState = true
                                         }
                                     },
-                                    onSelectRelatedMedia = { rel -> viewModel.loadMediaDetail(rel) }
+                                    onSelectRelatedMedia = { rel -> viewModel.loadMediaDetail(rel) },
+                                    onSearchActor = { actorName ->
+                                        viewModel.updateSearchQuery(actorName)
+                                        navController.navigate(DiscoverRoute) {
+                                            popUpTo(navController.graph.findStartDestination().id) {
+                                                saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    }
                                 )
                             }
 
@@ -882,7 +896,18 @@ private fun CineVaultShell(
                                 restoreState = true
                             }
                         },
-                        onSelectRelatedMedia = { rel -> viewModel.loadMediaDetail(rel) }
+                        onSelectRelatedMedia = { rel -> viewModel.loadMediaDetail(rel) },
+                        onSearchActor = { actorName ->
+                            showTitleDetailModal = false
+                            viewModel.updateSearchQuery(actorName)
+                            navController.navigate(DiscoverRoute) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
                     )
                 }
             }

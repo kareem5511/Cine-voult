@@ -87,6 +87,7 @@ import androidx.core.graphics.toColorInt
 import com.example.R
 import com.example.data.model.PlaybackEngine
 import com.example.data.model.PosterLayout
+import com.example.data.model.SyncedAddon
 import com.example.data.model.TrailerAutoPlayMode
 import com.example.data.model.UiTextScale
 import com.example.data.model.UserPreferences
@@ -94,6 +95,8 @@ import com.example.ui.theme.AccentPreset
 import com.example.ui.theme.AmoledCard
 import com.example.ui.theme.machinedCardBorder
 import kotlin.math.roundToInt
+import org.json.JSONArray
+import org.json.JSONObject
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -101,6 +104,8 @@ fun SettingsScreen(
     preferences: UserPreferences,
     userEmail: String?,
     isGuestMode: Boolean = false,
+    installedAddons: List<SyncedAddon> = emptyList(),
+    onInstallAddon: (String) -> Unit = {},
     onUpdatePreferences: ((UserPreferences) -> UserPreferences) -> Unit,
     onSignInClick: () -> Unit = {},
     onSignOut: () -> Unit,
@@ -866,54 +871,230 @@ fun SettingsScreen(
                         }
                     }
 
-                    // JSON Configuration Backup & Restore
+                    // Trakt.tv Scrobble & Cloud Sync Card
+                    Surface(
+                        color = Color.White.copy(alpha = 0.04f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Rounded.CloudSync,
+                                    contentDescription = null,
+                                    tint = Color(0xFFED1C24),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Trakt.tv Scrobble & Sync",
+                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = Color.White
+                                    )
+                                    Text(
+                                        text = "Auto-sync watch history and playback progress across devices",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color.White.copy(alpha = 0.60f)
+                                    )
+                                }
+                                Switch(
+                                    checked = preferences.traktScrobbling,
+                                    onCheckedChange = { checked ->
+                                        onUpdatePreferences { it.copy(traktScrobbling = checked) }
+                                    },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color(0xFFED1C24),
+                                        checkedTrackColor = Color(0xFFED1C24).copy(alpha = 0.35f)
+                                    )
+                                )
+                            }
+
+                            if (preferences.traktScrobbling) {
+                                var traktInput by remember(preferences.traktUsername) {
+                                    mutableStateOf(preferences.traktUsername)
+                                }
+                                OutlinedTextField(
+                                    value = traktInput,
+                                    onValueChange = {
+                                        traktInput = it
+                                        onUpdatePreferences { p -> p.copy(traktUsername = it.trim()) }
+                                    },
+                                    label = { Text("Trakt Username or Profile") },
+                                    placeholder = { Text("e.g. your_trakt_id") },
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = Color(0xFFED1C24),
+                                        unfocusedBorderColor = Color.White.copy(alpha = 0.20f),
+                                        focusedLabelColor = Color(0xFFED1C24),
+                                        cursorColor = Color(0xFFED1C24)
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                if (preferences.traktUsername.isNotBlank()) {
+                                    Surface(
+                                        color = Color(0xFF2E7D32).copy(alpha = 0.20f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(1.dp, Color(0xFF2E7D32).copy(alpha = 0.50f))
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(8.dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color(0xFF4CAF50))
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "Scrobbling Active • @${preferences.traktUsername}",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                color = Color(0xFF81C784)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // JSON Configuration Backup & Restore (Full Setup)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         OutlinedButton(
                             onClick = {
-                                val json = """
-                                {
-                                  "preferredEngine": "${preferences.preferredEngine}",
-                                  "hardwareDecoding": ${preferences.hardwareDecoding},
-                                  "subtitleFontSizeSp": ${preferences.subtitleFontSizeSp},
-                                  "subtitleColorHex": "${preferences.subtitleColorHex}",
-                                  "subtitleBgOpacity": ${preferences.subtitleBgOpacity},
-                                  "preferredSubtitleLang": "${preferences.preferredSubtitleLang}",
-                                  "preferredAudioLang": "${preferences.preferredAudioLang}",
-                                  "accentPreset": "${preferences.accentPreset}",
-                                  "posterLayout": "${preferences.posterLayout}",
-                                  "uiTextScale": "${preferences.uiTextScale}",
-                                  "amoledBlack": ${preferences.amoledBlack},
-                                  "autoPlayTrailers": "${preferences.autoPlayTrailers}"
+                                val root = JSONObject()
+                                root.put("version", 2)
+                                root.put("exportedAt", System.currentTimeMillis())
+
+                                val prefObj = JSONObject().apply {
+                                    put("preferredEngine", preferences.preferredEngine)
+                                    put("hardwareDecoding", preferences.hardwareDecoding)
+                                    put("subtitleFontSizeSp", preferences.subtitleFontSizeSp)
+                                    put("subtitleColorHex", preferences.subtitleColorHex)
+                                    put("subtitleBgOpacity", preferences.subtitleBgOpacity)
+                                    put("subtitleDelayMs", preferences.subtitleDelayMs)
+                                    put("preferredSubtitleLang", preferences.preferredSubtitleLang)
+                                    put("preferredAudioLang", preferences.preferredAudioLang)
+                                    put("accentPreset", preferences.accentPreset)
+                                    put("compactGrid", preferences.compactGrid)
+                                    put("posterLayout", preferences.posterLayout)
+                                    put("uiTextScale", preferences.uiTextScale)
+                                    put("amoledBlack", preferences.amoledBlack)
+                                    put("autoPlayTrailers", preferences.autoPlayTrailers)
+                                    put("autoFetchLocalMetadata", preferences.autoFetchLocalMetadata)
+                                    put("downloadWifiOnly", preferences.downloadWifiOnly)
+                                    put("ambientBackdropGlow", preferences.ambientBackdropGlow)
+                                    put("autoMatchBestStream", preferences.autoMatchBestStream)
+                                    put("autoSkipIntro", preferences.autoSkipIntro)
+                                    put("autoPlayNextEpisode", preferences.autoPlayNextEpisode)
+                                    put("codecCompatibilityFallback", preferences.codecCompatibilityFallback)
+                                    put("defaultDownloadQuality", preferences.defaultDownloadQuality)
+                                    put("simultaneousDownloadsLimit", preferences.simultaneousDownloadsLimit)
+                                    put("embeddedSubtitlePriority", preferences.embeddedSubtitlePriority)
+                                    put("traktScrobbling", preferences.traktScrobbling)
+                                    put("traktUsername", preferences.traktUsername)
                                 }
-                                """.trimIndent()
+                                root.put("preferences", prefObj)
+
+                                val addonsArr = JSONArray()
+                                installedAddons.forEach { addon ->
+                                    if (addon.manifestUrl.isNotBlank()) {
+                                        addonsArr.put(addon.manifestUrl)
+                                    }
+                                }
+                                root.put("addonManifestUrls", addonsArr)
+
+                                val jsonString = root.toString(2)
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                val clip = android.content.ClipData.newPlainText("CineVault Settings", json)
+                                val clip = android.content.ClipData.newPlainText("CineVault Setup", jsonString)
                                 clipboard.setPrimaryClip(clip)
-                                Toast.makeText(context, "Settings JSON copied to clipboard!", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Full setup copied! (${installedAddons.size} addons + settings)", Toast.LENGTH_LONG).show()
                             },
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Export JSON")
+                            Icon(Icons.Rounded.CloudSync, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Export Setup")
                         }
 
                         OutlinedButton(
                             onClick = {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                                 val text = clipboard.primaryClip?.getItemAt(0)?.text?.toString().orEmpty()
-                                if (text.contains("preferredEngine") || text.contains("accentPreset")) {
-                                    Toast.makeText(context, "Configuration imported successfully!", Toast.LENGTH_SHORT).show()
-                                } else {
-                                    Toast.makeText(context, "No settings JSON found in clipboard", Toast.LENGTH_SHORT).show()
+                                if (text.isBlank()) {
+                                    Toast.makeText(context, "Clipboard is empty", Toast.LENGTH_SHORT).show()
+                                    return@OutlinedButton
+                                }
+                                try {
+                                    val root = JSONObject(text)
+                                    val prefObj = if (root.has("preferences")) root.getJSONObject("preferences") else root
+
+                                    onUpdatePreferences { current ->
+                                        current.copy(
+                                            preferredEngine = prefObj.optString("preferredEngine", current.preferredEngine),
+                                            hardwareDecoding = prefObj.optBoolean("hardwareDecoding", current.hardwareDecoding),
+                                            subtitleFontSizeSp = prefObj.optInt("subtitleFontSizeSp", current.subtitleFontSizeSp),
+                                            subtitleColorHex = prefObj.optString("subtitleColorHex", current.subtitleColorHex),
+                                            subtitleBgOpacity = prefObj.optDouble("subtitleBgOpacity", current.subtitleBgOpacity),
+                                            subtitleDelayMs = prefObj.optInt("subtitleDelayMs", current.subtitleDelayMs),
+                                            preferredSubtitleLang = prefObj.optString("preferredSubtitleLang", current.preferredSubtitleLang),
+                                            preferredAudioLang = prefObj.optString("preferredAudioLang", current.preferredAudioLang),
+                                            accentPreset = prefObj.optString("accentPreset", current.accentPreset),
+                                            compactGrid = prefObj.optBoolean("compactGrid", current.compactGrid),
+                                            posterLayout = prefObj.optString("posterLayout", current.posterLayout),
+                                            uiTextScale = prefObj.optString("uiTextScale", current.uiTextScale),
+                                            amoledBlack = prefObj.optBoolean("amoledBlack", current.amoledBlack),
+                                            autoPlayTrailers = prefObj.optString("autoPlayTrailers", current.autoPlayTrailers),
+                                            autoFetchLocalMetadata = prefObj.optBoolean("autoFetchLocalMetadata", current.autoFetchLocalMetadata),
+                                            downloadWifiOnly = prefObj.optBoolean("downloadWifiOnly", current.downloadWifiOnly),
+                                            ambientBackdropGlow = prefObj.optBoolean("ambientBackdropGlow", current.ambientBackdropGlow),
+                                            autoMatchBestStream = prefObj.optBoolean("autoMatchBestStream", current.autoMatchBestStream),
+                                            autoSkipIntro = prefObj.optBoolean("autoSkipIntro", current.autoSkipIntro),
+                                            autoPlayNextEpisode = prefObj.optBoolean("autoPlayNextEpisode", current.autoPlayNextEpisode),
+                                            codecCompatibilityFallback = prefObj.optBoolean("codecCompatibilityFallback", current.codecCompatibilityFallback),
+                                            defaultDownloadQuality = prefObj.optString("defaultDownloadQuality", current.defaultDownloadQuality),
+                                            simultaneousDownloadsLimit = prefObj.optInt("simultaneousDownloadsLimit", current.simultaneousDownloadsLimit),
+                                            embeddedSubtitlePriority = prefObj.optBoolean("embeddedSubtitlePriority", current.embeddedSubtitlePriority),
+                                            traktScrobbling = prefObj.optBoolean("traktScrobbling", current.traktScrobbling),
+                                            traktUsername = prefObj.optString("traktUsername", current.traktUsername)
+                                        )
+                                    }
+
+                                    var installedCount = 0
+                                    if (root.has("addonManifestUrls")) {
+                                        val arr = root.getJSONArray("addonManifestUrls")
+                                        for (i in 0 until arr.length()) {
+                                            val url = arr.optString(i)
+                                            if (url.isNotBlank()) {
+                                                onInstallAddon(url)
+                                                installedCount++
+                                            }
+                                        }
+                                    }
+                                    Toast.makeText(context, "Setup restored! Settings updated & $installedCount addons queued", Toast.LENGTH_LONG).show()
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Invalid CineVault JSON: ${e.message}", Toast.LENGTH_SHORT).show()
                                 }
                             },
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Import JSON")
+                            Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Import Setup")
                         }
                     }
 

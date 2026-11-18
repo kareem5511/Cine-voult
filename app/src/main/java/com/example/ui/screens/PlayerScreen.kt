@@ -21,8 +21,14 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material3.HorizontalDivider
@@ -275,8 +281,18 @@ fun PlayerScreen(
     var isSwitchingUpNext by remember { mutableStateOf(false) }
     var isResolvingEpisodeStreams by remember { mutableStateOf(false) }
     var autoMatchToast by remember { mutableStateOf<String?>(null) }
-    var autoMatchToastToken by remember { mutableIntStateOf(0) }
     var episodeEmptyError by remember { mutableStateOf<String?>(null) }
+
+    // Double-tap edge seek state (YouTube-style accumulating -10s, -20s... or +10s, +20s...)
+    var doubleTapSeekSide by remember { mutableStateOf<String?>(null) } // "left" or "right"
+    var doubleTapAccumSeconds by remember { mutableIntStateOf(0) }
+    var doubleTapToken by remember { mutableIntStateOf(0) }
+
+    // Sleep Timer state
+    var sleepTimerMinutesRemaining by remember { mutableIntStateOf(0) }
+    var sleepTimerTargetMs by remember { mutableLongStateOf(0L) }
+    var sleepTimerUntilEnd by remember { mutableStateOf(false) }
+    var showSleepTimerSheet by remember { mutableStateOf(false) }
 
     // Brightness state (0.05f .. 1.0f) — touch-gesture controlled
     var brightnessLevel by remember {
@@ -365,6 +381,48 @@ fun PlayerScreen(
         if (autoMatchToastToken > 0) {
             delay(3000L)
             autoMatchToast = null
+        }
+    }
+
+    // Auto-clear YouTube-style double-tap edge seek overlay
+    LaunchedEffect(doubleTapToken) {
+        if (doubleTapToken > 0) {
+            delay(850L)
+            doubleTapSeekSide = null
+            doubleTapAccumSeconds = 0
+        }
+    }
+
+    // Sleep Timer countdown & pause trigger
+    LaunchedEffect(sleepTimerTargetMs, sleepTimerUntilEnd) {
+        if (sleepTimerTargetMs > 0L) {
+            while (true) {
+                val remaining = sleepTimerTargetMs - System.currentTimeMillis()
+                if (remaining <= 0L) {
+                    exoController.pause()
+                    sleepTimerTargetMs = 0L
+                    sleepTimerMinutesRemaining = 0
+                    activeOverlayIcon = Icons.Rounded.Bedtime
+                    activeOverlayProgress = null
+                    activeOverlayHud = "Sleep timer expired • Playback paused"
+                    hudToken++
+                    break
+                }
+                sleepTimerMinutesRemaining = ((remaining + 59_999L) / 60_000L).toInt()
+                delay(1000L)
+            }
+        }
+    }
+
+    LaunchedEffect(uiState.isEnded, sleepTimerUntilEnd) {
+        if (sleepTimerUntilEnd && uiState.isEnded) {
+            exoController.pause()
+            sleepTimerUntilEnd = false
+            sleepTimerMinutesRemaining = 0
+            activeOverlayIcon = Icons.Rounded.Bedtime
+            activeOverlayProgress = null
+            activeOverlayHud = "Sleep timer: reached end of title"
+            hudToken++
         }
     }
 
@@ -692,13 +750,32 @@ fun PlayerScreen(
                             return@detectTapGestures
                         }
                         val width = size.width.coerceAtLeast(1)
-                        val seekDelta = if (offset.x < width / 2f) -10_000L else 10_000L
-                        exoController.seekBy(seekDelta)
-                        activeOverlayIcon = if (seekDelta < 0) Icons.Rounded.Replay10 else Icons.Rounded.Forward10
-                        activeOverlayProgress = null
-                        activeOverlayHud = if (seekDelta < 0) "-10s" else "+10s"
-                        hudToken++
-                        lastInteractionMs = System.currentTimeMillis()
+                        val isLeft = offset.x < width * 0.42f
+                        val isRight = offset.x > width * 0.58f
+                        if (isLeft) {
+                            if (doubleTapSeekSide == "left") {
+                                doubleTapAccumSeconds += 10
+                            } else {
+                                doubleTapSeekSide = "left"
+                                doubleTapAccumSeconds = 10
+                            }
+                            doubleTapToken++
+                            exoController.seekBy(-10_000L)
+                            lastInteractionMs = System.currentTimeMillis()
+                        } else if (isRight) {
+                            if (doubleTapSeekSide == "right") {
+                                doubleTapAccumSeconds += 10
+                            } else {
+                                doubleTapSeekSide = "right"
+                                doubleTapAccumSeconds = 10
+                            }
+                            doubleTapToken++
+                            exoController.seekBy(10_000L)
+                            lastInteractionMs = System.currentTimeMillis()
+                        } else {
+                            if (latestUiState.isPlaying) exoController.pause() else exoController.play()
+                            lastInteractionMs = System.currentTimeMillis()
+                        }
                     }
                 )
             }
@@ -867,6 +944,90 @@ fun PlayerScreen(
                             modifier = Modifier.width(150.dp).height(4.dp)
                         )
                     }
+                }
+            }
+        }
+
+        // YouTube-style Edge Double-Tap Seek Arc Overlay (Left - Rewind)
+        AnimatedVisibility(
+            visible = doubleTapSeekSide == "left" && !isPipMode,
+            enter = fadeIn(tween(140)) + scaleIn(initialScale = 0.82f),
+            exit = fadeOut(tween(220)),
+            modifier = Modifier.align(Alignment.CenterStart)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight(0.60f)
+                    .width(140.dp)
+                    .clip(RoundedCornerShape(topEndPercent = 100, bottomEndPercent = 100))
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                Color.White.copy(alpha = 0.22f),
+                                Color.White.copy(alpha = 0.08f),
+                                Color.Transparent
+                            )
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Replay,
+                        contentDescription = "Rewind",
+                        tint = Color.White,
+                        modifier = Modifier.size(34.dp)
+                    )
+                    Text(
+                        text = "-${doubleTapAccumSeconds}s",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White
+                    )
+                }
+            }
+        }
+
+        // YouTube-style Edge Double-Tap Seek Arc Overlay (Right - Fast Forward)
+        AnimatedVisibility(
+            visible = doubleTapSeekSide == "right" && !isPipMode,
+            enter = fadeIn(tween(140)) + scaleIn(initialScale = 0.82f),
+            exit = fadeOut(tween(220)),
+            modifier = Modifier.align(Alignment.CenterEnd)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight(0.60f)
+                    .width(140.dp)
+                    .clip(RoundedCornerShape(topStartPercent = 100, bottomStartPercent = 100))
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                Color.Transparent,
+                                Color.White.copy(alpha = 0.08f),
+                                Color.White.copy(alpha = 0.22f)
+                            )
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Forward10,
+                        contentDescription = "Fast Forward",
+                        tint = Color.White,
+                        modifier = Modifier.size(34.dp)
+                    )
+                    Text(
+                        text = "+${doubleTapAccumSeconds}s",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White
+                    )
                 }
             }
         }
@@ -1040,6 +1201,37 @@ fun PlayerScreen(
                                 imageVector = Icons.Rounded.ScreenRotation,
                                 contentDescription = "Rotate screen",
                                 tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (sleepTimerMinutesRemaining > 0 || sleepTimerUntilEnd) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f)
+                                    else Color.Black.copy(alpha = 0.45f)
+                                )
+                                .border(
+                                    BorderStroke(
+                                        1.dp,
+                                        if (sleepTimerMinutesRemaining > 0 || sleepTimerUntilEnd) MaterialTheme.colorScheme.primary
+                                        else Color.White.copy(alpha = 0.20f)
+                                    ),
+                                    CircleShape
+                                )
+                                .bouncyClickable(scaleDown = 0.88f, onClick = {
+                                    lastInteractionMs = System.currentTimeMillis()
+                                    showSleepTimerSheet = true
+                                })
+                                .testTag("player_sleep_timer_button"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Bedtime,
+                                contentDescription = "Sleep timer",
+                                tint = if (sleepTimerMinutesRemaining > 0 || sleepTimerUntilEnd) MaterialTheme.colorScheme.primary else Color.White,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -1763,6 +1955,153 @@ fun PlayerScreen(
             },
             onDismiss = { showSpeedSheet = false }
         )
+    }
+
+    if (showSleepTimerSheet) {
+        SleepTimerSheet(
+            activeMinutesRemaining = sleepTimerMinutesRemaining,
+            sleepUntilEnd = sleepTimerUntilEnd,
+            onSetTimer = { mins, untilEnd ->
+                if (untilEnd) {
+                    sleepTimerUntilEnd = true
+                    sleepTimerTargetMs = 0L
+                    sleepTimerMinutesRemaining = 0
+                    activeOverlayIcon = Icons.Rounded.Bedtime
+                    activeOverlayProgress = null
+                    activeOverlayHud = "Sleep timer: At end of title"
+                    hudToken++
+                } else if (mins > 0) {
+                    sleepTimerUntilEnd = false
+                    sleepTimerMinutesRemaining = mins
+                    sleepTimerTargetMs = System.currentTimeMillis() + mins * 60_000L
+                    activeOverlayIcon = Icons.Rounded.Bedtime
+                    activeOverlayProgress = null
+                    activeOverlayHud = "Sleep timer set for ${mins}m"
+                    hudToken++
+                } else {
+                    sleepTimerUntilEnd = false
+                    sleepTimerTargetMs = 0L
+                    sleepTimerMinutesRemaining = 0
+                    activeOverlayIcon = Icons.Rounded.Bedtime
+                    activeOverlayProgress = null
+                    activeOverlayHud = "Sleep timer turned off"
+                    hudToken++
+                }
+            },
+            onDismiss = { showSleepTimerSheet = false }
+        )
+    }
+}
+
+@kotlin.OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SleepTimerSheet(
+    activeMinutesRemaining: Int,
+    sleepUntilEnd: Boolean,
+    onSetTimer: (minutes: Int, untilEnd: Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(
+                        imageVector = Icons.Rounded.Bedtime,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text("Sleep Timer", style = MaterialTheme.typography.titleLarge)
+                }
+                if (activeMinutesRemaining > 0 || sleepUntilEnd) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = if (sleepUntilEnd) "Until End" else "${activeMinutesRemaining}m remaining",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            }
+
+            Text(
+                "Playback will pause automatically when the timer expires.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            val options = listOf(
+                0 to "Off (Turn timer off)",
+                15 to "15 minutes",
+                30 to "30 minutes",
+                45 to "45 minutes",
+                60 to "60 minutes",
+                -1 to "End of this title"
+            )
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                options.forEach { (mins, label) ->
+                    val isSelected = when (mins) {
+                        0 -> activeMinutesRemaining == 0 && !sleepUntilEnd
+                        -1 -> sleepUntilEnd
+                        else -> activeMinutesRemaining in (mins - 2)..(mins + 2) && !sleepUntilEnd
+                    }
+                    Surface(
+                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                        else MaterialTheme.colorScheme.surfaceContainer,
+                        shape = RoundedCornerShape(12.dp),
+                        border = if (isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+                        else BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable {
+                                if (mins == -1) {
+                                    onSetTimer(0, true)
+                                } else {
+                                    onSetTimer(mins, false)
+                                }
+                                onDismiss()
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                ),
+                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                            )
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Icons.Rounded.CheckCircle,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
     }
 }
 

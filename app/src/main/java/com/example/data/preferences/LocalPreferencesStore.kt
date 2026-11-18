@@ -41,6 +41,8 @@ class LocalPreferencesStore(private val context: Context) {
         val DL_QUALITY = stringPreferencesKey("default_download_quality")
         val SIMULTANEOUS_DL = intPreferencesKey("simultaneous_downloads_limit")
         val EMBEDDED_SUB_PRIORITY = booleanPreferencesKey("embedded_subtitle_priority")
+        val TRAKT_SCROBBLING = booleanPreferencesKey("trakt_scrobbling")
+        val TRAKT_USERNAME = stringPreferencesKey("trakt_username")
         val GUEST_SKIPPED = booleanPreferencesKey("guest_mode_skipped")
         val STARTER_ADDONS_SEEDED = booleanPreferencesKey("starter_addons_seeded")
         val HIDDEN_CATALOGS = stringSetPreferencesKey("hidden_catalog_keys")
@@ -117,7 +119,9 @@ class LocalPreferencesStore(private val context: Context) {
             codecCompatibilityFallback = prefs[Keys.CODEC_FALLBACK] ?: true,
             defaultDownloadQuality = prefs[Keys.DL_QUALITY] ?: "1080p",
             simultaneousDownloadsLimit = prefs[Keys.SIMULTANEOUS_DL] ?: 2,
-            embeddedSubtitlePriority = prefs[Keys.EMBEDDED_SUB_PRIORITY] ?: false
+            embeddedSubtitlePriority = prefs[Keys.EMBEDDED_SUB_PRIORITY] ?: false,
+            traktScrobbling = prefs[Keys.TRAKT_SCROBBLING] ?: false,
+            traktUsername = prefs[Keys.TRAKT_USERNAME] ?: ""
         )
     }
 
@@ -147,6 +151,8 @@ class LocalPreferencesStore(private val context: Context) {
             mutable[Keys.DL_QUALITY] = prefs.defaultDownloadQuality
             mutable[Keys.SIMULTANEOUS_DL] = prefs.simultaneousDownloadsLimit
             mutable[Keys.EMBEDDED_SUB_PRIORITY] = prefs.embeddedSubtitlePriority
+            mutable[Keys.TRAKT_SCROBBLING] = prefs.traktScrobbling
+            mutable[Keys.TRAKT_USERNAME] = prefs.traktUsername
         }
     }
 
@@ -176,6 +182,8 @@ class LocalPreferencesStore(private val context: Context) {
             mutable[Keys.DL_QUALITY] = remote.defaultDownloadQuality
             mutable[Keys.SIMULTANEOUS_DL] = remote.simultaneousDownloadsLimit
             mutable[Keys.EMBEDDED_SUB_PRIORITY] = remote.embeddedSubtitlePriority
+            mutable[Keys.TRAKT_SCROBBLING] = remote.traktScrobbling
+            mutable[Keys.TRAKT_USERNAME] = remote.traktUsername
         }
     }
 }

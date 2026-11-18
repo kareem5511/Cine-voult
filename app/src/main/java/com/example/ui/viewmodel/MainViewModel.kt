@@ -980,6 +980,21 @@ class CineVaultViewModel(
         }
     }
 
+    fun pauseDownload(downloadKey: String) {
+        viewModelScope.launch {
+            downloadManager.pauseDownload(downloadKey)
+            _statusBanner.value = "Paused download"
+        }
+    }
+
+    fun resumeDownload(downloadKey: String) {
+        viewModelScope.launch {
+            val wifiOnly = preferencesState.value.downloadWifiOnly
+            downloadManager.resumeDownload(downloadKey, wifiOnly)
+            _statusBanner.value = "Resuming download..."
+        }
+    }
+
     // ---- Local Media & Automatic Metadata Retrieval ----
 
     fun importLocalVideo(uri: Uri) {

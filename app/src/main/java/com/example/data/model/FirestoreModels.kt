@@ -72,6 +72,8 @@ data class UserPreferences(
     val defaultDownloadQuality: String = "1080p", // 1080p | 720p | ask
     val simultaneousDownloadsLimit: Int = 2,
     val embeddedSubtitlePriority: Boolean = false,
+    val traktScrobbling: Boolean = false,
+    val traktUsername: String = "",
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 )

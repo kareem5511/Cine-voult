@@ -43,6 +43,7 @@ import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Downloading
 import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Sort
@@ -115,6 +116,8 @@ fun LibraryScreen(
     onRefreshLocalMetadata: (String) -> Unit,
     onDeleteLocalMedia: (String) -> Unit,
     onDeleteDownload: (String) -> Unit,
+    onPauseDownload: (String) -> Unit = {},
+    onResumeDownload: (String) -> Unit = {},
     onPlayRequest: (PlaybackRequest) -> Unit,
     onOpenPreview: ((StremioMetaPreview) -> Unit)? = null,
     posterLayout: String = "STANDARD_2",
@@ -246,7 +249,9 @@ fun LibraryScreen(
                 downloads = downloads,
                 preferredEngine = preferredEngine,
                 onPlayRequest = onPlayRequest,
-                onDeleteDownload = onDeleteDownload
+                onDeleteDownload = onDeleteDownload,
+                onPauseDownload = onPauseDownload,
+                onResumeDownload = onResumeDownload
             )
             3 -> LocalMediaTab(
                 localMedia = localMedia,
@@ -718,7 +723,9 @@ private fun OfflineDownloadsTab(
     downloads: List<OfflineDownloadEntity>,
     preferredEngine: PlaybackEngine,
     onPlayRequest: (PlaybackRequest) -> Unit,
-    onDeleteDownload: (String) -> Unit
+    onDeleteDownload: (String) -> Unit,
+    onPauseDownload: (String) -> Unit = {},
+    onResumeDownload: (String) -> Unit = {}
 ) {
     val activeDownloads = remember(downloads) {
         downloads.filter { it.status != DownloadStatus.COMPLETED.name }
@@ -751,6 +758,20 @@ private fun OfflineDownloadsTab(
                 }
                 items(activeDownloads, key = { it.downloadKey }) { dl ->
                     val dlShape = RoundedCornerShape(14.dp)
+                    val isPaused = dl.status == DownloadStatus.PAUSED.name
+                    val statusText = when (dl.status) {
+                        DownloadStatus.DOWNLOADING.name -> {
+                            if (dl.errorMessage.isNotBlank() && !dl.errorMessage.contains("failed", ignoreCase = true) && !dl.errorMessage.contains("error", ignoreCase = true)) {
+                                "Downloading • ${dl.errorMessage}"
+                            } else {
+                                "Downloading"
+                            }
+                        }
+                        DownloadStatus.PAUSED.name -> "Paused"
+                        DownloadStatus.QUEUED.name -> "Queued"
+                        else -> dl.status.lowercase().replaceFirstChar { it.uppercase() }
+                    }
+
                     Card(
                         colors = CardDefaults.cardColors(containerColor = AmoledCard),
                         shape = dlShape,
@@ -772,7 +793,7 @@ private fun OfflineDownloadsTab(
                                 CircularProgressIndicator(
                                     progress = { dl.progressPercent / 100f },
                                     modifier = Modifier.size(46.dp),
-                                    color = MaterialTheme.colorScheme.primary,
+                                    color = if (isPaused) Color(0xFFFFB74D) else MaterialTheme.colorScheme.primary,
                                     trackColor = Color.White.copy(alpha = 0.10f),
                                     strokeWidth = 3.dp
                                 )
@@ -794,9 +815,11 @@ private fun OfflineDownloadsTab(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = "${dl.qualityLabel} • ${dl.status.lowercase().replaceFirstChar { it.uppercase() }}",
+                                    text = "${dl.qualityLabel} • $statusText",
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = if (isPaused) Color(0xFFFFB74D) else MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 if (dl.totalBytes > 0L) {
                                     Text(
@@ -807,12 +830,31 @@ private fun OfflineDownloadsTab(
                                 }
                             }
 
-                            IconButton(onClick = { onDeleteDownload(dl.downloadKey) }) {
-                                Icon(
-                                    Icons.Rounded.Close,
-                                    contentDescription = "Cancel download",
-                                    tint = Color.White.copy(alpha = 0.70f)
-                                )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (isPaused) {
+                                    IconButton(onClick = { onResumeDownload(dl.downloadKey) }) {
+                                        Icon(
+                                            Icons.Rounded.PlayArrow,
+                                            contentDescription = "Resume download",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                } else {
+                                    IconButton(onClick = { onPauseDownload(dl.downloadKey) }) {
+                                        Icon(
+                                            Icons.Rounded.Pause,
+                                            contentDescription = "Pause download",
+                                            tint = Color(0xFFFFB74D)
+                                        )
+                                    }
+                                }
+                                IconButton(onClick = { onDeleteDownload(dl.downloadKey) }) {
+                                    Icon(
+                                        Icons.Rounded.Close,
+                                        contentDescription = "Cancel download",
+                                        tint = Color.White.copy(alpha = 0.70f)
+                                    )
+                                }
                             }
                         }
                     }
